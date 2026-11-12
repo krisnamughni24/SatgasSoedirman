@@ -1,0 +1,8 @@
+node_modules/
+tools/video/local.html
+tools/video/frames/
+tools/video/cframes/
+tools/video/*.wav
+tools/video/cues.json
+__pycache__/
+.DS_Store
