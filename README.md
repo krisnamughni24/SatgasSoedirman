@@ -40,9 +40,9 @@ The President is the patron of the programme, not a system user. Officials are s
 | Tab | What it does |
 |---|---|
 | **Beranda** | Personal status, progress rings, field actions (check-in, visit, record aspiration, ask for help, team meeting, report an issue), live team mini map, day timeline, tasks, team chat, performance radar vs cohort, workload |
-| **Operasi** | Live 3D map of Java (Three.js): 119 regencies as columns, 384 Serdik as moving dots, event pulses, collaboration arcs, alert queue with SLA, live log, regional panel |
+| **Operasi** | Live 3D map of Java (Three.js): 119 regencies as columns (metrics include resistance index), 384 Serdik as moving dots, event pulses, collaboration arcs, alert queue with SLA, live log, regional panel |
 | **Hub Serdik** | Channels (team, province, cohort, cross-region help, good practice, command post), direct messages, polls, reactions, "I can help" cards, sentiment highlighting, morale gauge |
-| **Analitik** | Dorling cartogram, need-vs-coverage bubbles, correlation matrix, treemap, status flow (alluvial), aging histogram, sentiment gauges/trend/heatmap/trigger words, live sentiment tester, c-chart and p-chart (SPC) |
+| **Analitik** | Penetration map (Serdik per regency over a resistance heatmap: 3 categories, with gradient shade by resistance index %, plus share per category and competency tier mix), Dorling cartogram, need-vs-coverage bubbles, correlation matrix, treemap, status flow (alluvial), aging histogram, sentiment gauges/trend/heatmap/trigger words, live sentiment tester, c-chart and p-chart (SPC) |
 | **Aspirasi** | Drag-and-drop board across 8 statuses, follow-up funnel, Pareto chart |
 | **Jaringan** | Interaction network (d3-force on canvas): geographic or force layout, ego network, top connectors |
 | **Laporan** | Auto-generated report per scope with insights and recommendations; personal daily report with mood and support needs |

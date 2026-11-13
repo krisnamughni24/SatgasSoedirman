@@ -680,6 +680,7 @@ nav.tabs a[aria-current="page"] .ic{color:var(--gold-2);opacity:1}
         <button data-m="aktivitas">Aktivitas hari ini</button>
         <button data-m="alert">Peringatan</button>
         <button data-m="komplementer">Kelengkapan tim</button>
+        <button data-m="resistensi">Resistensi</button>
       </div>
       <div class="seg" role="group" aria-label="Warna titik" id="colorSeg"><button data-c="status" aria-pressed="true">Titik: status</button><button data-c="cluster">Titik: kluster</button></div>
       <label class="tog"><input type="checkbox" id="tLines" checked> Garis koordinasi</label>
@@ -787,7 +788,7 @@ nav.tabs a[aria-current="page"] .ic{color:var(--gold-2);opacity:1}
 
   <!-- ANALYTICS -->
   <section data-pane="analitik" id="pane-analitik" hidden>
-    <div class="pane-head"><div><h2>Data analytics</h2><p>Visual dari seluruh aktivitas lapangan, diperbarui langsung.</p></div><div class="seg" id="anSeg" role="group" aria-label="Halaman analitik"><button data-v="ringkas" aria-pressed="true">Ringkasan</button><button data-v="wilayah">Wilayah</button><button data-v="aspirasi">Aspirasi</button><button data-v="sentimen">Sentimen</button><button data-v="spc">Kendali proses</button></div></div>
+    <div class="pane-head"><div><h2>Data analytics</h2><p>Visual dari seluruh aktivitas lapangan, diperbarui langsung.</p></div><div class="seg" id="anSeg" role="group" aria-label="Halaman analitik"><button data-v="ringkas" aria-pressed="true">Ringkasan</button><button data-v="wilayah">Wilayah</button><button data-v="penetrasi">Penetrasi</button><button data-v="aspirasi">Aspirasi</button><button data-v="sentimen">Sentimen</button><button data-v="spc">Kendali proses</button></div></div>
     <div id="anBody" class="grid"></div>
   </section>
 
@@ -959,6 +960,32 @@ S.filter(s=>!s.priority&&s.conf>=4&&s.work>=5&&s.willing).slice(0,12).forEach(s=
 const PRIO={kes:'Mandat kesehatan',khusus:'Penugasan khusus (wilayah akses sulit)'};
 const ABSENT_IDS=[17,58,133,201,276,349]; // used by what-if; 17 is avoided below for exemplar stability
 ABSENT_IDS[0]=19;
+
+/* ============ penetration map: resistance index, gender, competency tier ============ */
+// Resistance Index (IR, 0–100) per regency: dummy, deterministic (hsh, not rnd, so the seeded data above stays stable)
+const IR_PROV={'Banten':6,'DKI Jakarta':-4,'Jawa Barat':4,'Jawa Tengah':-6,'DI Yogyakarta':-24,'Jawa Timur':12};
+R.forEach(r=>{
+  let v=12+hsh(r.id*7.13+3.1)*62+IR_PROV[r.prov]+(r.remote?14:0)+(MADURA.has(r.name)?10:0)+(r.kota?-7:0);
+  r.ir=Math.round(clamp(v));
+});
+// Level 1: three categories. Level 2: gradient inside each category driven by the exact IR.
+// Shade gets darker toward the extreme of its category (deep green = safest, deep red = most resistant).
+const IRCAT={
+  aman:    {n:'Aman',                   lo:0,  hi:33,  light:'#C0DD97', dark:'#27500A', rev:true},
+  sedang:  {n:'Tidak terlalu resisten', lo:34, hi:66,  light:'#FAC775', dark:'#854F0B'},
+  resisten:{n:'Resisten',               lo:67, hi:100, light:'#F7C1C1', dark:'#791F1F'},
+};
+const IRKEYS=['aman','sedang','resisten'];
+const irCat=v=>v<34?'aman':v<67?'sedang':'resisten';
+function irIntensity(v){const c=IRCAT[irCat(v)];const t=(v-c.lo)/(c.hi-c.lo);return Math.max(0,Math.min(1,c.rev?1-t:t));}
+function mixHex(a,b,t){const p=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));const A=p(a),B=p(b);return '#'+A.map((x,i)=>Math.round(x+(B[i]-x)*t).toString(16).padStart(2,'0')).join('');}
+const irColor=v=>{const c=IRCAT[irCat(v)];return mixHex(c.light,c.dark,irIntensity(v));};
+const irInk=v=>irIntensity(v)>.55?'#FFFFFF':({aman:'#173404',sedang:'#412402',resisten:'#501313'})[irCat(v)];
+function irGradientCSS(){const st=[];for(let v=0;v<=100;v++)st.push(`${irColor(v)} ${v}%`);return `linear-gradient(90deg,${st.join(',')})`;}
+// Gender (dummy) and competency tier: top 25% Superior, bottom 20% Inferior, rest Normal
+S.forEach(s=>{s.sex=hsh(s.idx*3.31+1.7)<.36?'P':'L';const c=[s.cA,s.cB,s.cC,s.cD];s.compScore=Math.round(.5*Math.max(...c)+.5*c.reduce((a,b)=>a+b,0)/4);});
+[...S].sort((a,b)=>b.compScore-a.compScore).forEach((s,i)=>s.tier=i<S.length*.25?'sup':i>=S.length*.8?'inf':'nor');
+const TIER={sup:{n:'Superior',d:'Kinerja & potensi tinggi',fill:'#13274A',stroke:'#FFFFFF'},nor:{n:'Normal',d:'Sesuai ekspektasi',fill:'#FFFFFF',stroke:'#13274A'},inf:{n:'Inferior',d:'Perlu pengembangan',fill:'#8A8F98',stroke:'#FFFFFF'}};
 
 /* ============ placement engine ============ */
 function score(s,r){
@@ -1403,15 +1430,17 @@ function metricVal(r){
   if(state.metric==='aktivitas')return r.actToday||0;
   if(state.metric==='alert')return sim.alerts.filter(a=>a.state!=='done'&&a.s.region===r).length;
   if(state.metric==='komplementer')return r.covN;
+  if(state.metric==='resistensi')return r.ir;
   return I.filter(it=>it.region===r&&active(it)).length;
 }
-function metricLabel(r){const v=metricVal(r);return{isu:`${v} isu aktif`,aktivitas:`${v} aktivitas hari ini`,alert:`${v} peringatan terbuka`,komplementer:`${v}/4 kluster terpenuhi${r.missing.length?' · kurang '+r.missing.join(', '):''}`}[state.metric];}
+function metricLabel(r){const v=metricVal(r);return{isu:`${v} isu aktif`,aktivitas:`${v} aktivitas hari ini`,alert:`${v} peringatan terbuka`,komplementer:`${v}/4 kluster terpenuhi${r.missing.length?' · kurang '+r.missing.join(', '):''}`,resistensi:`Indeks resistensi ${v}% · ${IRCAT[irCat(v)].n}`}[state.metric];}
 let colCache=0;
 function updateColumns(){
   if(!T)return;const vals=R.map(metricVal),mx=Math.max(...vals,1);
   const c0=new THREE.Color('#EADFC3'),c1=new THREE.Color('#13274A'),crit=new THREE.Color('#A3202C'),warn=new THREE.Color('#C9932F'),ok=new THREE.Color('#2E7A52');
   T.cols.forEach((m,i)=>{const r=R[i],v=vals[i],n=v/mx;
     if(state.metric==='komplementer'){m.userData.target=.6+v*1.3;m.material.color.copy(r.team.length===0?crit:r.complete?(r.covN===4?ok:c1):(r.missing.length>1?crit:warn));}
+    else if(state.metric==='resistensi'){m.userData.target=.25+v/100*6.5;m.material.color.set(irColor(v));}
     else if(state.metric==='alert'){m.userData.target=v?1+v*2.2:.15;m.material.color.copy(v?crit:c0);}
     else{m.userData.target=.25+n*6.5;m.material.color.copy(c0).lerp(c1,n);}});
   renderLegend();
@@ -1420,6 +1449,7 @@ function renderLegend(){
   const m=state.metric;let h='';
   if(m==='komplementer')h='<div><b>Kelengkapan tim</b></div><div><span class="sw" style="background:#2E7A52"></span>A–D <span class="sw" style="background:#13274A;margin-left:6px"></span>A–C <span class="sw" style="background:#C9932F;margin-left:6px"></span>kurang 1 <span class="sw" style="background:#A3202C;margin-left:6px"></span>kurang ≥2</div>';
   else if(m==='alert')h='<div><b>Peringatan terbuka per wilayah</b></div>';
+  else if(m==='resistensi')h=`<div><b>Indeks resistensi (IR)</b></div><div style="height:8px;border-radius:4px;width:170px;max-width:100%;background:${irGradientCSS()}"></div><div style="display:flex;justify-content:space-between;width:170px;max-width:100%"><span>Aman</span><span>Sedang</span><span>Resisten</span></div>`;
   else h=`<div><b>${m==='isu'?'Isu aktif':'Aktivitas hari ini'}</b></div><div style="height:7px;border-radius:4px;width:150px;max-width:100%;background:linear-gradient(90deg,#EADFC3,#13274A)"></div>`;
   if(state.colorMode==='status')h+='<div style="display:flex;flex-wrap:wrap;gap:2px 8px">'+['duty','travel','visit','help','meet','kendala','off'].map(k=>`<span><span class="sw" style="background:${STAT[k][1]}"></span>${STAT[k][0]}</span>`).join('')+'</div>';
   else h+='<div>'+['A','B','C','D'].map(k=>`<span class="sw" style="background:${CLHEX[k]};margin-left:4px"></span>${k}`).join(' ')+'</div>';
@@ -2579,7 +2609,7 @@ function renderAnalytics(force){
   if(!force&&!['ringkas','sentimen'].includes(AN.view))return;
   if(!force&&renderAnalytics._t&&performance.now()-renderAnalytics._t<5000)return;renderAnalytics._t=performance.now();
   $$('#anSeg button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.v===AN.view));
-  const f={ringkas:anRingkas,wilayah:anWilayah,aspirasi:anAspirasi,sentimen:anSentimen,spc:anSPC}[AN.view];
+  const f={ringkas:anRingkas,wilayah:anWilayah,penetrasi:anPenetrasi,aspirasi:anAspirasi,sentimen:anSentimen,spc:anSPC}[AN.view];
   const sy=window.scrollY;f(force);if(!force)window.scrollTo(0,sy);
 }
 const GROUPS=[['Kunjungan',['visit'],'#4A86C8'],['Aspirasi',['aspirasi'],'#C59A4A'],['Tindak lanjut',['rujukan','respons','monitor'],'#2A7F86'],['Kolaborasi',['bantuan','referral','rapat'],'#B0476A'],['Kendala',['kendala','eskalasi'],'#A3202C']];
@@ -2634,6 +2664,47 @@ function anWilayah(anim){
    ${card2('s6','Korelasi antar-indikator wilayah','Pearson r, 119 wilayah',`<svg class="vis" viewBox="0 0 ${84+MS.length*cs+6} ${36+MS.length*cs}" style="max-width:420px;margin:auto">${cm}</svg>`)}</div>`;
   $('#anMet').onclick=e=>{const b=e.target.closest('button');if(b){AN.metric=b.dataset.k;anWilayah(true);}};
   $('#anCol').onclick=e=>{const b=e.target.closest('button');if(b){AN.color=b.dataset.k;anWilayah(true);}};
+  animateBars($('#anBody'));
+}
+function anPenetrasi(anim){
+  // 2D map: Voronoi cell per regency, masked to a coastline-like blob of circles around the regency points
+  const W=900,H=310,k=96,px=lon=>(lon-105.55)*k;
+  const P=R.map(r=>[px(r.lon),(-(r.lat)-5.55)*k+12]);
+  let cells='',mask='',marks='';
+  if(window.d3){const vor=d3.Delaunay.from(P).voronoi([0,0,W,H]);
+    R.forEach((r,i)=>{const c=IRCAT[irCat(r.ir)];cells+=`<path d="${vor.renderCell(i)}" fill="${irColor(r.ir)}" stroke="#fff" stroke-width=".8" data-rid="${r.id}" data-tt="${esc(r.name)} · IR ${r.ir}% · ${c.n} · intensitas ${Math.round(irIntensity(r.ir)*100)}% · ${r.team.length} Serdik" style="cursor:pointer${anim?`;animation:fade .4s ${i*5}ms both`:''}"/>`;});}
+  R.forEach((r,i)=>{mask+=`<circle cx="${P[i][0].toFixed(1)}" cy="${P[i][1].toFixed(1)}" r="${r.name==='Kab. Kepulauan Seribu'?12:30}" fill="#fff"/>`;
+    const n=r.team.length;r.team.forEach((s,j)=>{const a=j/Math.max(n,1)*Math.PI*2-Math.PI/2,rad=n>1?7:0,x=P[i][0]+Math.cos(a)*rad,y=P[i][1]+Math.sin(a)*rad,t=TIER[s.tier];
+      const tt=`data-tt="${esc(s.name)} · ${s.sex==='P'?'Perempuan':'Laki-laki'} · ${t.n} · ${esc(r.name)}"`;
+      marks+=s.sex==='L'?`<path d="M${x.toFixed(1)},${(y-5).toFixed(1)} L${(x+4.6).toFixed(1)},${(y+3.4).toFixed(1)} L${(x-4.6).toFixed(1)},${(y+3.4).toFixed(1)}Z" fill="${t.fill}" stroke="${t.stroke}" stroke-width="1.2" ${tt}/>`
+        :`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.6" fill="${t.fill}" stroke="${t.stroke}" stroke-width="1.2" ${tt}/>`;});});
+  // stats per category
+  const all=S.filter(s=>s.region),st=IRKEYS.map(key=>{const rs=R.filter(r=>irCat(r.ir)===key),ss=all.filter(s=>irCat(s.region.ir)===key);
+    const tc={sup:0,nor:0,inf:0};ss.forEach(s=>tc[s.tier]++);
+    return{key,c:IRCAT[key],n:rs.length,pr:rs.length/R.length*100,avg:rs.length?rs.reduce((a,r)=>a+r.ir,0)/rs.length:0,ns:ss.length,ps:all.length?ss.length/all.length*100:0,tc,dens:rs.length?ss.length/rs.length:0,
+      noSup:rs.filter(r=>r.team.length&&!r.team.some(s=>s.tier==='sup')).length};});
+  const p1=v=>v.toFixed(1).replace('.',',');
+  const statCard=x=>{const sw=mixHex(x.c.light,x.c.dark,.65),tot=x.ns||1;
+    return `<div style="background:var(--bg,#FBF8F1);border:1px solid var(--line,#EDE4D2);border-radius:12px;padding:12px 14px;display:grid;gap:6px">
+      <div class="row" style="gap:6px;align-items:center"><span style="width:12px;height:12px;border-radius:3px;background:${sw}"></span><b class="small">${x.c.n}</b><span class="small muted">IR ${x.c.lo}–${x.c.hi}%</span></div>
+      <div class="row between" style="align-items:baseline"><b class="num" style="font-size:1.6rem">${p1(x.pr)}%</b><span class="small muted">${x.n} kab/kota · rerata IR ${p1(x.avg)}%</span></div>
+      <div class="small muted">${x.ns} Serdik (${p1(x.ps)}% dari total) · ${p1(x.dens)} Serdik/wilayah</div>
+      <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:#EDE4D2">${['sup','nor','inf'].map(t=>`<i style="width:${x.tc[t]/tot*100}%;background:${TIER[t].fill};${t==='nor'?'box-shadow:inset 0 0 0 1px #13274A':''}" data-tt="${TIER[t].n}: ${x.tc[t]} (${p1(x.tc[t]/tot*100)}%)"></i>`).join('')}</div>
+      <div class="small muted">Superior ${p1(x.tc.sup/tot*100)}% · Normal ${p1(x.tc.nor/tot*100)}% · Inferior ${p1(x.tc.inf/tot*100)}%</div></div>`;};
+  // gradient legend
+  const legend=`<div style="display:grid;gap:4px"><div style="height:14px;border-radius:4px;background:${irGradientCSS()}"></div>
+    <div style="position:relative;height:14px" class="small muted"><span style="position:absolute;left:0">0%</span><span style="position:absolute;left:33.5%;transform:translateX(-50%)">33%</span><span style="position:absolute;left:66.5%;transform:translateX(-50%)">66%</span><span style="position:absolute;right:0">100%</span></div>
+    <div class="legend-row" style="justify-content:space-between"><span>Aman: hijau makin pekat = makin aman</span><span>Tidak terlalu resisten</span><span>Resisten: merah makin pekat = makin resisten</span></div>
+    <div class="legend-row"><span><svg width="12" height="11"><path d="M6,1 L11,10 L1,10Z" fill="#13274A"/></svg> laki-laki</span><span><svg width="11" height="11"><circle cx="5.5" cy="5.5" r="4.5" fill="#13274A"/></svg> perempuan</span>${['sup','nor','inf'].map(t=>`<span><i style="background:${TIER[t].fill};border:1px solid #13274A"></i>${TIER[t].n} (${TIER[t].d.toLowerCase()})</span>`).join('')}</div></div>`;
+  // insights
+  const [sa,ss2,sr]=st,worst=[...R].sort((a,b)=>b.ir-a.ir).slice(0,8);
+  const ins=[`${p1(sr.pr)}% kab/kota masuk kategori resisten, tetapi hanya ${p1(sr.ps)}% Serdik ditempatkan di sana.`,
+    `Kepadatan penempatan: ${p1(sa.dens)} Serdik/wilayah di wilayah aman vs ${p1(sr.dens)} di wilayah resisten.`,
+    `${sr.noSup} wilayah resisten belum memiliki Serdik Superior di timnya.`];
+  $('#anBody').innerHTML=`<div class="an-grid">${card2('s8','Peta penetrasi Serdik & resistensi wilayah','warna = kategori · kepekatan = IR (%)',`<svg class="vis" viewBox="0 0 ${W} ${H}"><defs><mask id="javaMask">${mask}</mask></defs><g mask="url(#javaMask)">${cells}</g><g>${marks}</g></svg>${legend}`)}
+   ${card2('s4','Persentase per kategori','dari 119 kab/kota',`<div class="grid" style="gap:10px">${st.map(statCard).join('')}</div>`)}
+   ${card2('s6','Temuan','dihitung langsung dari data',`<div class="grid" style="gap:8px">${ins.map(t=>`<div class="insight"><span class="ico"><svg class="ic"><use href="#i-alert"/></svg></span><span>${t}</span></div>`).join('')}</div>`)}
+   ${card2('s6','IR tertinggi','klik untuk membuka di Operasi',`<div class="grid" style="gap:8px">${worst.map((r,i)=>`<div class="barrow" style="grid-template-columns:22px 1fr 140px;cursor:pointer" data-rid="${r.id}"><b class="num">${i+1}</b><div><div class="small" style="font-weight:600">${esc(r.name)}</div><div class="track" style="height:6px;margin-top:3px"><i data-w="${r.ir}" style="background:${irColor(r.ir)}"></i></div></div><span class="num small">${r.ir}% · ${r.team.length} Serdik</span></div>`).join('')}</div>`)}</div>`;
   animateBars($('#anBody'));
 }
 function anAspirasi(anim){
