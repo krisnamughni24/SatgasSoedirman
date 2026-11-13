@@ -47,6 +47,10 @@ button,select,input,textarea{font:inherit;color:inherit}
 a{color:var(--accent)}
 
 /* ---------- login ---------- */
+.fsFloat{position:absolute;z-index:3;top:max(16px,env(safe-area-inset-top,0px));right:max(16px,env(safe-area-inset-right,0px));display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:999px;border:1px solid rgba(227,198,138,.5);background:rgba(11,24,48,.55);color:var(--gold-2);font:600 .82rem var(--f-ui,inherit);cursor:pointer;backdrop-filter:blur(6px)}
+.fsFloat:hover{background:rgba(11,24,48,.8)}
+.fsFloat:focus-visible,.fsBtn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+@media (max-width:520px){.fsFloat span{display:none}}
 #login{min-height:100vh;display:grid;place-items:center;padding-block:32px;position:relative;overflow:hidden}
 #login{background:radial-gradient(1200px 700px at 70% 20%,#1B3561,var(--navy) 55%,var(--navy-2))}
 #loginBg{position:absolute;inset:0;width:100%;height:100%;opacity:.7}
@@ -567,11 +571,14 @@ nav.tabs a[aria-current="page"] .ic{color:var(--gold-2);opacity:1}
 <symbol id="i-box" viewBox="0 0 24 24"><path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/></symbol>
 <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M7 21h10M5 7h14M5 7l-3 6a3 3 0 0 0 6 0zM19 7l-3 6a3 3 0 0 0 6 0z"/></symbol>
 <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></symbol>
+<symbol id="i-expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+<symbol id="i-shrink" viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></symbol>
 <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
 </defs></svg>
 <!-- ============ LOGIN ============ -->
 <div id="login">
   <canvas id="loginBg" aria-hidden="true"></canvas>
+  <button class="fsBtn fsFloat" type="button" aria-label="Layar penuh" title="Layar penuh (F)"><svg class="ic"><use href="#i-expand"/></svg><span>Layar penuh</span></button>
   <div class="wrap" style="width:100%;display:grid;place-items:center">
     <div class="login-card">
       <div class="login-hero">
@@ -618,6 +625,7 @@ nav.tabs a[aria-current="page"] .ic{color:var(--gold-2);opacity:1}
       <div class="me-chip">
         <span class="rolepill" id="roleChip"></span><div class="avatar" id="meAvatar"></div>
         <div class="who"><b id="meName"></b><span class="muted" id="meSub"></span></div>
+        <button class="btn sm fsBtn" type="button" aria-label="Layar penuh" title="Layar penuh (F)"><svg class="ic"><use href="#i-expand"/></svg></button>
         <button class="btn sm" id="tourBtn">Tur</button>
         <button class="btn sm" id="logoutBtn">Keluar</button>
       </div>
@@ -3729,6 +3737,45 @@ function roleQueueCount() {
   if (r === 'mitra') return I.filter(i => USER.cats.includes(i.cat) && i.si >= 4 && i.si <= 5 && i.auth >= 1 && !i.mitraAck).length;
   return 0;
 }
+
+/* ================================================================
+   FULLSCREEN
+   Toggle from the header or login screen, or with the F key. Hidden where
+   the browser does not allow element fullscreen (e.g. iPhone Safari).
+   ================================================================ */
+(() => {
+  const root = document.documentElement;
+  const req = root.requestFullscreen || root.webkitRequestFullscreen;
+  const exit = document.exitFullscreen || document.webkitExitFullscreen;
+  const cur = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const enabled = !!req && (document.fullscreenEnabled !== false) && (document.webkitFullscreenEnabled !== false || !!root.requestFullscreen);
+  const sync = () => {
+    const on = !!cur();
+    $$('.fsBtn').forEach(b => {
+      b.setAttribute('aria-pressed', on);
+      b.setAttribute('aria-label', on ? 'Keluar layar penuh' : 'Layar penuh');
+      b.title = (on ? 'Keluar layar penuh' : 'Layar penuh') + ' (F)';
+      b.querySelector('use').setAttribute('href', on ? '#i-shrink' : '#i-expand');
+      const s = b.querySelector('span'); if (s) s.textContent = on ? 'Keluar layar penuh' : 'Layar penuh';
+    });
+    // the 3D map and network canvas size themselves from the window
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 120);
+  };
+  function toggleFullscreen() {
+    try {
+      const p = cur() ? exit.call(document) : req.call(root, {navigationUI: 'hide'});
+      if (p && p.catch) p.catch(() => toast('Browser menolak mode layar penuh'));
+    } catch (e) { toast('Mode layar penuh tidak tersedia di browser ini'); }
+  }
+  $$('.fsBtn').forEach(b => { if (!enabled) b.hidden = true; b.addEventListener('click', toggleFullscreen); });
+  document.addEventListener('fullscreenchange', sync);
+  document.addEventListener('webkitfullscreenchange', sync);
+  document.addEventListener('keydown', e => {
+    if (!enabled || e.key.toLowerCase() !== 'f' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
+    e.preventDefault(); toggleFullscreen();
+  });
+})();
 
 initRoles();renderWeights();
 requestAnimationFrame(frame);

@@ -669,3 +669,42 @@ function roleQueueCount() {
   if (r === 'mitra') return I.filter(i => USER.cats.includes(i.cat) && i.si >= 4 && i.si <= 5 && i.auth >= 1 && !i.mitraAck).length;
   return 0;
 }
+
+/* ================================================================
+   FULLSCREEN
+   Toggle from the header or login screen, or with the F key. Hidden where
+   the browser does not allow element fullscreen (e.g. iPhone Safari).
+   ================================================================ */
+(() => {
+  const root = document.documentElement;
+  const req = root.requestFullscreen || root.webkitRequestFullscreen;
+  const exit = document.exitFullscreen || document.webkitExitFullscreen;
+  const cur = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const enabled = !!req && (document.fullscreenEnabled !== false) && (document.webkitFullscreenEnabled !== false || !!root.requestFullscreen);
+  const sync = () => {
+    const on = !!cur();
+    $$('.fsBtn').forEach(b => {
+      b.setAttribute('aria-pressed', on);
+      b.setAttribute('aria-label', on ? 'Keluar layar penuh' : 'Layar penuh');
+      b.title = (on ? 'Keluar layar penuh' : 'Layar penuh') + ' (F)';
+      b.querySelector('use').setAttribute('href', on ? '#i-shrink' : '#i-expand');
+      const s = b.querySelector('span'); if (s) s.textContent = on ? 'Keluar layar penuh' : 'Layar penuh';
+    });
+    // the 3D map and network canvas size themselves from the window
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 120);
+  };
+  function toggleFullscreen() {
+    try {
+      const p = cur() ? exit.call(document) : req.call(root, {navigationUI: 'hide'});
+      if (p && p.catch) p.catch(() => toast('Browser menolak mode layar penuh'));
+    } catch (e) { toast('Mode layar penuh tidak tersedia di browser ini'); }
+  }
+  $$('.fsBtn').forEach(b => { if (!enabled) b.hidden = true; b.addEventListener('click', toggleFullscreen); });
+  document.addEventListener('fullscreenchange', sync);
+  document.addEventListener('webkitfullscreenchange', sync);
+  document.addEventListener('keydown', e => {
+    if (!enabled || e.key.toLowerCase() !== 'f' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
+    e.preventDefault(); toggleFullscreen();
+  });
+})();
