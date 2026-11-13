@@ -37,7 +37,7 @@ function emit(type,o){
   const ev={id:++evid,type,abs:abs(),time:hhmm(sim.min),text:o.text,s:o.s||null,r:o.r||(o.s&&o.s.region)||null,x:o.x,z:o.z,important:!!o.important};
   if(ev.x==null&&ev.s){ev.x=ev.s.cx;ev.z=ev.s.cz;}
   if(ev.x==null&&ev.r){ev.x=ev.r.x;ev.z=ev.r.z;}
-  ev.mine=!!(me&&(ev.s===me||(ev.r&&ev.r===me.region)));
+  ev.mine=!!(me&&(isField()?(ev.s===me||(ev.r&&ev.r===me.region)):(USER&&USER.provs&&ev.r&&inScope(ev.r))));
   sim.events.unshift(ev);if(sim.events.length>600)sim.events.length=600;
   sim.today[type]=(sim.today[type]||0)+1;
   const h=Math.floor(sim.min/60);(sim.hourly[type]=sim.hourly[type]||{})[h]=(sim.hourly[type][h]||0)+1;
@@ -187,8 +187,8 @@ function stepMinute(){
   }
   const roll=(p,fn)=>{if(rnd()<p*f)fn();};
   roll(.24,evRujukan);roll(.15,evRespons);roll(.2,evMonitor);roll(.045,evBantuan);roll(.03,evKendala);
-  if(me&&me.st!=='off'&&rnd()<.011*f)evRequestToMe();
-  if(me&&rnd()<.028*f)chatTick();
+  if(me&&isField()&&me.st!=='off'&&rnd()<.011*f)evRequestToMe();
+  if(me&&isField()&&rnd()<.028*f)chatTick();
   if(window.__hubTick)window.__hubTick(f);
   sim.pendingReplies=sim.pendingReplies.filter(p=>{if(now>=p.at){pushChat(p.from,p.text);return false;}return true;});
   for(const a of sim.alerts){
@@ -344,7 +344,7 @@ function render3D(dt,now){
   T.dots.count=k;T.dots.instanceMatrix.needsUpdate=true;if(T.dots.instanceColor)T.dots.instanceColor.needsUpdate=true;
   if($('#tLines').checked){const pts=[];R.forEach(r=>{const c=r.coord;if(!c)return;r.team.forEach(s=>{if(s!==c)pts.push(c.cx,.8,c.cz,s.cx,.8,s.cz);});});
     T.lines.geometry.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));T.lines.visible=true;}else T.lines.visible=false;
-  if(me&&me.region){T.meMark.visible=T.meRing.visible=true;T.meMark.position.set(me.cx,1.45+Math.sin(now/400)*.2,me.cz);T.meMark.rotation.y+=dt*1.5;
+  if(me&&me.region&&isField()){T.meMark.visible=T.meRing.visible=true;T.meMark.position.set(me.cx,1.45+Math.sin(now/400)*.2,me.cz);T.meMark.rotation.y+=dt*1.5;
     const rp=(now/1400)%1;T.meRing.position.set(me.cx,.7,me.cz);T.meRing.scale.setScalar(1+rp*2.4);T.meRing.material.opacity=1-rp;}else T.meMark.visible=T.meRing.visible=false;
   if(state.sel){T.ring.visible=true;T.ring.position.set(state.sel.x,.72,state.sel.z);T.ring.rotation.z+=dt*.4;}else T.ring.visible=false;
   // event pulses
@@ -371,7 +371,7 @@ function render3D(dt,now){
 }
 function spawnCallout(ev){if(!T)return;if(fx.callouts.length>=3){const o=fx.callouts.shift();o.el.remove();}
   const el=document.createElement('div');el.className='callout';el.style.borderLeftColor=EVT[ev.type][2];
-  el.innerHTML=`<b>${EVT[ev.type][0]}</b> · ${ev.time}<br>${esc(ev.text)}`;T.stage.appendChild(el);fx.callouts.push({el,x:ev.x,z:ev.z,born:performance.now()});}
+  el.innerHTML=`<b>${EVT[ev.type][0]}</b> · ${ev.time}<br>${esc(anonText(ev.text))}`;T.stage.appendChild(el);fx.callouts.push({el,x:ev.x,z:ev.z,born:performance.now()});}
 function flyTo(r,dur=1.2){
   if(!T)return;const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
   const t1=r?new THREE.Vector3(r.x,0,r.z):T.HOME.tgt.clone();
@@ -431,16 +431,15 @@ function login(s){
   if(location.hash!=='#saya')location.hash='saya';else route();
   if(!T)initScene();else flyTo(null,2);
   buildMinimap();
-  setTimeout(()=>startTour(TOUR_MAIN),500);
+  setTimeout(()=>startTour(tourFor()),500);
 }
 function topCat(r){const c={};I.filter(i=>i.region===r&&active(i)).forEach(i=>c[i.cat]=(c[i.cat]||0)+1);const e=Object.entries(c).sort((a,b)=>b[1]-a[1])[0];return e?e[0].toLowerCase():'warga';}
-$('#logoutBtn').onclick=()=>{me=null;$('#app').hidden=true;$('#login').hidden=false;endTour();closeDrawer();initLogin();};
 
 const TABS=['saya','operasi','hub','analitik','isu','jaringan','laporan','penempatan','lab','arena','bantuan','direktori'];
 function route(){
   if(!me)return;
-  const h=location.hash.replace('#','');const tab=TABS.includes(h)?h:'saya';const prev=state.tab;state.tab=tab;
-  $$('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==tab);
+  const h=location.hash.replace('#','');const tab=TABS.includes(h)&&tabAllowed(h)?h:'saya';if(h!==tab&&h){location.replace('#'+tab);}const prev=state.tab;state.tab=tab;
+  const pane=tab==='saya'&&!isField()?'kendali':tab;$$('[data-pane]').forEach(p=>p.hidden=p.dataset.pane!==pane);
   $$('nav.tabs a').forEach(a=>{if(a.dataset.tab===tab)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');});
   const stage=$('#stage');
   if(tab==='penempatan'){$('#plStageSlot').appendChild(stage);state.prevMetric=state.prevMetric||state.metric;state.metric='komplementer';state.colorMode='cluster';updateColumns();renderPlacement();}
@@ -455,7 +454,7 @@ function route(){
   if(tab==='laporan')renderReport(true);
   if(tab==='arena')renderArena();
   if(tab==='bantuan')renderHelp();
-  if(tab==='saya'){sim.myVer++;buildMinimap();renderHome(true);renderPerf();}
+  if(tab==='saya'){if(isField()){sim.myVer++;buildMinimap();renderHome(true);renderPerf();}else renderRoleHome(true);}
   if(tab==='operasi'){renderSide(true);renderOpsKpis();renderStatus();renderHourly();updateColumns();}
   if(prev!==tab)window.scrollTo({top:0});
 }
@@ -491,7 +490,7 @@ function showTourStep(){
       $('#tSkip').onclick=endTour;$('#tNext').onclick=nextTour;const p=$('#tPrev');if(p)p.onclick=()=>{tour.i--;showTourStep();};$('#tNext').focus();},420);},st.tab?160:0);
 }
 function nextTour(){if(!tour)return;tour.i++;if(tour.i>=tour.steps.length){endTour();toast('Tur selesai. Selamat bertugas!');}else showTourStep();}
-$('#tourBtn').onclick=()=>startTour(TOUR_MAIN);
+$('#tourBtn').onclick=()=>startTour(tourFor());
 window.addEventListener('resize',()=>{if(tour)showTourStep();});
 
 /* ================================================================
@@ -645,15 +644,15 @@ function slaInfo(a){const now=abs(),left=a.due-now,tot=a.due-a.created;return{le
 function renderAlerts(){
   const p=$('#sidePanel');const open=sim.alerts.filter(a=>a.state!=='done'),done=sim.alerts.filter(a=>a.state==='done').slice(0,5);
   open.sort((a,b)=>(b.toMe?1:0)-(a.toMe?1:0)||(a.state==='open'?0:1)-(b.state==='open'?0:1)||a.due-b.due);
-  const actBtns=a=>{if(a.state!=='open')return `<span class="small muted">Ditangani: ${esc(a.handler)}${a.helper&&a.helper.st==='travel'?' · dalam perjalanan':''}</span>`;
+  const actBtns=a=>{if(a.state==='open'&&!a.toMe&&!canAlert(a))return '<span class="small muted">Hanya lihat · di luar kewenangan peran Anda</span>';if(a.state!=='open')return `<span class="small muted">Ditangani: ${esc(a.handler)}${a.helper&&a.helper.st==='travel'?' · dalam perjalanan':''}</span>`;
     if(a.toMe)return `<div class="row"><button class="btn sm primary" data-act="accept" data-id="${a.id}">Terima permintaan</button><button class="btn sm" data-act="decline" data-id="${a.id}">Alihkan</button></div>`;
     if(a.type==='kendala')return `<div class="row"><button class="btn sm" data-act="koord" data-id="${a.id}">Hubungi koordinator</button><button class="btn sm danger" data-act="eskalasi" data-id="${a.id}">Eskalasi ke posko</button></div>`;
     if(a.type==='kritis')return `<div class="row"><button class="btn sm" data-act="validasi" data-id="${a.id}">Validasi &amp; prioritaskan</button><button class="btn sm primary" data-act="rujuk" data-id="${a.id}">Rujuk ke ${esc(INST[a.it.cat].split(' /')[0])}</button></div>`;
-    const hs=helpersFor(a);return `<div class="small muted">Rekomendasi rekan (kompetensi + jarak):</div><div class="row">${hs.map(h=>`<button class="btn sm" data-act="help:${h.s.idx}" data-id="${a.id}">${h.s===me?'Saya':esc(h.s.name.split(' ')[0])} · ${h.s.dom} · ${Math.round(h.d*11)} km</button>`).join('')}</div>`;};
+    const hs=helpersFor(a);return `<div class="small muted">Rekomendasi rekan (kompetensi + jarak):</div><div class="row">${hs.map(h=>`<button class="btn sm" data-act="help:${h.s.idx}" data-id="${a.id}">${h.s===me?'Saya':esc(dispName(h.s).split(' ').slice(-1)[0])} · ${h.s.dom} · ${Math.round(h.d*11)} km</button>`).join('')}</div>`;};
   p.innerHTML=`<div class="row between" style="margin-bottom:8px"><span class="lbl">${open.length} terbuka · ${sim.stats.handled} ditangani hari ini</span><span class="small muted">SLA tepat waktu ${pct(sim.stats.onTime,sim.stats.handled)}%</span></div>
   <div class="grid" style="gap:8px">${open.map(a=>{const s=slaInfo(a);return `<div class="alert ${a.type} ${a.state}${a.toMe?' tome':''}" data-aid="${a.id}">
     <div class="row between" style="flex-wrap:nowrap"><span class="row" style="gap:6px"><span class="code" style="background:${a.type==='kendala'?EVT.kendala[2]:a.type==='kritis'?'#6B0F18':EVT.bantuan[2]}">${a.type==='kendala'?'KD':a.type==='kritis'?'P!':'BR'}</span><b class="small">${a.type==='kendala'?'Kendala lapangan':a.type==='kritis'?'Aspirasi prioritas tinggi':a.toMe?'Permintaan untuk Anda':'Permintaan bantuan'}</b></span><span class="num small sla-t" style="color:${s.col}">${s.left>=0?s.left+' mnt':'+'+(-s.left)+' mnt'}</span></div>
-    <div class="small">${esc(a.text)}</div><div class="small muted"><a href="#" data-fly="${a.s.region.id}">${esc(a.s.region.name)}</a> · ${esc(a.s.name)} · ${a.id}</div>
+    <div class="small">${esc(anonText(a.text))}</div><div class="small muted"><a href="#" data-fly="${a.s.region.id}">${esc(a.s.region.name)}</a> · ${esc(dispName(a.s))} · ${a.id}</div>
     <div class="sla"><i style="width:${s.w}%;background:${s.col}"></i></div>${actBtns(a)}</div>`;}).join('')||'<div class="empty">Tidak ada peringatan terbuka.</div>'}</div>
   ${done.length?`<div style="margin-top:12px" class="grid"><span class="lbl">Baru ditangani</span>${done.map(a=>`<div class="small muted">✓ ${a.id} · ${esc(a.handler)} · ${a.doneAt-a.created} mnt${a.doneAt>a.due?' <span class="pill crit">lewat SLA</span>':''}</div>`).join('')}</div>`:''}`;
   $('#alertN').textContent=`(${open.filter(a=>a.state==='open').length})`;
@@ -668,7 +667,7 @@ function renderFeedShell(){
   $('#feedMine').onchange=e=>{state.feedMine=e.target.checked;renderFeedShell();};
 }
 function feedOk(e){if(state.feedMine&&!e.mine)return false;for(const g of feedFilter)if(FEEDG[g].includes(e.type))return false;return true;}
-function feedItem(e,anim){return `<div class="fi${anim?' in':''}${e.mine?' mine':''}" data-ev="${e.id}"><span class="code" style="background:${EVT[e.type][2]}">${EVT[e.type][1]}</span><span>${esc(e.text)}</span><span class="num muted" style="font-size:.68rem">${e.time}</span></div>`;}
+function feedItem(e,anim){return `<div class="fi${anim?' in':''}${e.mine?' mine':''}" data-ev="${e.id}"><span class="code" style="background:${EVT[e.type][2]}">${EVT[e.type][1]}</span><span>${esc(anonText(e.text))}</span><span class="num muted" style="font-size:.68rem">${e.time}</span></div>`;}
 function flushFeed(){
   const evs=sim.newEv;sim.newEv=[];if(!evs.length)return;
   if(state.tab==='operasi'&&state.side==='feed'){const f=$('#feed');if(f){const html=evs.filter(feedOk).slice(-12).reverse().map(e=>feedItem(e,true)).join('');f.insertAdjacentHTML('afterbegin',html);while(f.children.length>60)f.lastChild.remove();}}
@@ -686,22 +685,22 @@ function renderRegion(){
   const iss=I.filter(it=>it.region===r).sort((a,b)=>b.pr-a.pr),act=iss.filter(active);
   const km=(a,b)=>Math.hypot(a.cx-b.cx,a.cz-b.cz)*11;
   p.innerHTML=`<div class="grid" style="gap:12px">
-   <div><span class="lbl">${esc(r.prov)}</span><h3 style="font-size:1.15rem">${esc(r.name)}${r===me.region?' <span class="pill acc">wilayah Anda</span>':''}</h3>
+   <div><span class="lbl">${esc(r.prov)}</span><h3 style="font-size:1.15rem">${esc(r.name)}${isField()&&r===me.region?' <span class="pill acc">wilayah Anda</span>':''}</h3>
    <div class="row" style="margin-top:4px"><span class="pill acc">Kuota ${r.quota}</span><span class="pill">Bahasa ${LANGS[r.lang]}</span>${r.remote?'<span class="pill warn">Akses sulit</span>':''}${r.mandHealth?'<span class="pill crit">Mandat kesehatan</span>':''}</div>
-   <div class="row" style="margin-top:8px"><button class="btn sm" data-rb="fly">Fokus kamera</button><button class="btn sm" data-rb="issues">Papan isu wilayah</button>${r!==me.region?'<button class="btn sm" data-rb="me">Wilayah saya</button>':''}</div></div>
+   <div class="row" style="margin-top:8px"><button class="btn sm" data-rb="fly">Fokus kamera</button><button class="btn sm" data-rb="issues">Papan isu wilayah</button>${isField()&&r!==me.region?'<button class="btn sm" data-rb="me">Wilayah saya</button>':''}</div></div>
    <div class="cov">${['A','B','C','D'].map(k=>`<div style="${r.cov[k]>=60?`border-color:${CLHEX[k]}`:''}"><span class="ch ${k}">${k}</span><b>${r.cov[k]}</b></div>`).join('')}</div>
    <div><span class="lbl">Tim · status langsung</span>${r.team.map(s=>`<div class="rp-member" data-sid="${s.idx}"><div class="avatar" style="background:${CLHEX[s.dom]}">${esc(initials(s.name))}<span class="sdot" id="rs${s.idx}" style="background:${STAT[s.st][1]}"></span></div>
-     <div style="min-width:0"><div style="font-weight:600;font-size:.84rem">${s===me?'Anda':esc(s.name)}${s.coord?' <span class="pill acc">Koordinator</span>':''}</div><div class="small muted" id="ra${s.idx}">${esc(s.act||STAT[s.st][0])}</div></div>
+     <div style="min-width:0"><div style="font-weight:600;font-size:.84rem">${s===me?'Anda':esc(dispName(s))}${s.coord?' <span class="pill acc">Koordinator</span>':''}</div><div class="small muted" id="ra${s.idx}">${esc(s.act||STAT[s.st][0])}</div></div>
      <span class="num small" id="rk${s.idx}">${s.coord?'—':km(s,r.coord).toFixed(0)+' km'}</span></div>`).join('')}</div>
    <div><div class="row between"><span class="lbl">Aspirasi</span><span class="small muted">${act.length} aktif · ${r.actToday||0} aktivitas hari ini</span></div>
-   ${iss.slice(0,5).map(it=>`<div class="fi" data-iid="${it.id}"><span class="pill ${it.pr>=70?'crit':it.pr>=50?'warn':'ok'}">P${it.pr}</span><span>${esc(it.title)}<br><span class="muted" style="font-size:.7rem">${ST[it.si][2]} · ${AUTH[it.auth]}</span></span><span></span></div>`).join('')}</div>
+   ${iss.slice(0,5).map(it=>`<div class="fi" data-iid="${it.id}"><span class="pill ${it.pr>=70?'crit':it.pr>=50?'warn':'ok'}">P${it.pr}</span><span>${esc(anonText(it.title))}<br><span class="muted" style="font-size:.7rem">${ST[it.si][2]} · ${AUTH[it.auth]}</span></span><span></span></div>`).join('')}</div>
    <div><span class="lbl">Kejadian terakhir</span>${sim.events.filter(e=>e.r===r).slice(0,6).map(e=>feedItem(e,false)).join('')||'<div class="small muted">Belum ada kejadian hari ini.</div>'}</div></div>`;
 }
 function updateRegionLive(){const r=state.sel;if(!r)return;r.team.forEach(s=>{const d=$('#rs'+s.idx),a=$('#ra'+s.idx),k=$('#rk'+s.idx);if(d)d.style.background=STAT[s.st][1];if(a)a.textContent=s.act||STAT[s.st][0];if(k&&r.coord&&!s.coord)k.textContent=(Math.hypot(s.cx-r.coord.cx,s.cz-r.coord.cz)*11).toFixed(0)+' km';});}
 $('#sideSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.side=b.dataset.s;$$('#sideSeg button').forEach(x=>x.setAttribute('aria-pressed',x===b));renderSide(true);};
 $('#metricSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.metric=b.dataset.m;$$('#metricSeg button').forEach(x=>x.setAttribute('aria-pressed',x===b));updateColumns();};
 $('#colorSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.colorMode=b.dataset.c;$$('#colorSeg button').forEach(x=>x.setAttribute('aria-pressed',x===b));renderLegend();};
-$('#camMe').onclick=()=>{selectRegion(me.region,true);};
+$('#camMe').onclick=()=>{if(!isField()&&!(USER&&USER.provs)){flyTo(null);return;}selectRegion(me.region,true);};
 $('#camHome').onclick=()=>{flyTo(null);};
 
 const tweens=new Map();

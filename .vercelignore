@@ -1,0 +1,7 @@
+# Only index.html and assets/ are served; keep sources and tooling out of the deployment
+src/
+tools/
+docs/
+media/
+build.py
+*.md

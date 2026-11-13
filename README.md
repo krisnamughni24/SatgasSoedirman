@@ -1,3 +1,5 @@
+<p align="center"><img src="assets/logo-p3mdi.png" alt="P3MDI Soedirman" width="150"></p>
+
 # Satgas Soedirman
 
 **Integrated Field Operations, Community Intelligence & Decision Support Platform**: an interactive prototype for coordinating 384 Serdik deployed across 119 regencies/cities in Java.
@@ -10,9 +12,28 @@
 
 ## What it is
 
-The user logs in as one Serdik and runs their daily field work, while seeing how every other Serdik moves, helps each other and follows up on community aspirations. A built-in simulation drives the whole cohort in real time (1× to 40× speed).
+The user logs in under one of ten roles taken from the Satgas Soedirman org chart. A Serdik runs their daily field work while seeing how every other Serdik moves, helps each other and follows up on community aspirations; command, staff, owners, leadership and partners each get their own console over the same live data. A built-in simulation drives the whole cohort in real time (1× to 40× speed).
 
 The original proposal (in Indonesian) is in [`docs/GAGASAN.md`](docs/GAGASAN.md).
+
+## Roles
+
+Role and data scope are separate: the role decides modules and actions, the scope decides which regions are visible. Every decision made from a console is written to an audit log.
+
+| Role | Who (org chart) | Scope | Home console |
+|---|---|---|---|
+| **Serdik** | 384 Serdik | Own regency/city | Personal field home: check-in, visits, aspirations, help, team chat |
+| **Koordinator Kab/Kota** | One per team | Own team | Field home plus team alert handling and issue validation |
+| **Korwil** | Korwil I Jatim · II Jateng–DIY · III Jabar · IV Jakarta–Banten | Provinces of the Korwil | Regency tiles, scoped alert queue, team-reinforcement approvals, cross-Korwil comparison |
+| **Komando** | Komandan, Wakil Komandan | All of Java | Four Korwil cards, escalations, instructions to all Serdik, decision queue (team swaps, policy notes) |
+| **Staf Komando** | Asops, Asrena, Asminlog, Asintel, Hukum & Etik, Katim Anev | All of Java, per function | Function workspace: operations queue, planning tools, logistics budget, early-warning signals, ethics cases + audit, results chain |
+| **Admin Data & IT** | Katim Data & IT | System | Accounts and role changes, data quality, integrations, audit log |
+| **Konten & Layanan** | Katim Konten & Layanan | Content & service | Announcements, FAQ manager, helpdesk queue, Hub activity |
+| **Pimpinan** | Ketua/Anggota Pengarah, Ketua Pelaksana | National aggregate, anonymised | Executive summary, results chain, attention points |
+| **Mitra K/L** | Anggota Pelaksana Eselon I (ministries) | Referred aspirations of its sector | Referral inbox: forward to agency, request data, close |
+| **Pokja & Ahli** | Pokja 1–8, Kelompok Ahli | Thematic, anonymised | Thematic analytics; Pokja 8 drafts policy notes sent to Komando |
+
+The President is the patron of the programme, not a system user. Officials are shown by title only.
 
 ## Modules
 
@@ -35,7 +56,17 @@ Design principles kept throughout: two-layer placement (policy before scoring), 
 
 ## Run
 
-It is a single static page. Open `index.html` in a browser, or deploy the repo as-is to Vercel / GitHub Pages / any static host. Libraries load from CDNs (Three.js r128, d3 7.8.5, Google Fonts).
+It is a single static page. Open `index.html` in a browser. Libraries load from CDNs (Three.js r128, d3 7.8.5, Google Fonts); the logo and icons are embedded.
+
+Demo login: pick a role, pick an identity (Serdik ID such as `SRD-001`, or a position for other roles) and any 4-digit PIN.
+
+## Deploy to Vercel
+
+1. In Vercel, **Add New → Project** and import `krisnamughni24/SatgasSoedirman`.
+2. Framework preset **Other**. Leave Build Command and Output Directory empty (the built `index.html` is committed).
+3. Deploy. Every push to `main` redeploys.
+
+`vercel.json` adds clean URLs, security headers and long caching for `assets/`; `.vercelignore` keeps sources, tooling and the trailer out of the deployment. Rebuild with `python3 build.py` and commit `index.html` before pushing changes to `src/`.
 
 ## Develop
 
@@ -48,10 +79,12 @@ src/02-data-placement.js              regions, Serdik, issues, two-layer placeme
 src/03-engine-map-home-ops.js         simulation engine, 3D map, login, tour, Beranda, Operasi
 src/04-network-issues-lab.js          network, issue board, placement view, Lab SPK, directory, drawers, main loop
 src/05-visuals-hub-analytics-games.js chart toolkit, sentiment, Hub, Analitik, Laporan, Arena, Bantuan, extra Lab tools
+src/06-roles.js                       role definitions, permissions, scopes, role login, role consoles, audit log
+assets/                               P3MDI logo, favicon, touch icon (embedded at build time)
 ```
 
 ```bash
-python3 build.py   # writes index.html
+python3 build.py   # writes index.html (inlines assets/ as data URIs)
 ```
 
 Order matters: later files use globals declared earlier.

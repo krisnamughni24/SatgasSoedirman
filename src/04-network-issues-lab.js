@@ -41,7 +41,7 @@ function drawNet(dt){
   if(net.ver!==NET.ver)syncLinks();
   const {cv,tf,dpr}=NET,g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,NET.W,NET.H);
   g.save();g.translate(tf.x,tf.y);g.scale(tf.k,tf.k);
-  const ego=$('#netEgo').checked,mid=me.idx,nb=new Set([mid]);
+  const ego=isField()&&$('#netEgo').checked,mid=me.idx,nb=new Set([mid]);
   if(ego)NET.links.forEach(l=>{if(l.source.id===mid)nb.add(l.target.id);if(l.target.id===mid)nb.add(l.source.id);});
   for(const l of NET.links){const a=l.source,b=l.target;if(a.x==null)continue;const inEgo=a.id===mid||b.id===mid;
     let al=.13+Math.min(.45,l.e.w*.04);if(ego&&!inEgo)al*=.12;if(inEgo)al=Math.max(al,.65);
@@ -57,7 +57,7 @@ function drawNet(dt){
   g.globalAlpha=1;const m=NET.byId.get(mid);
   if(m){const t=(performance.now()/1400)%1;g.strokeStyle='#13274A';g.lineWidth=2/tf.k;g.beginPath();g.arc(m.x,m.y,(6+t*14)/tf.k,0,7);g.globalAlpha=1-t;g.stroke();g.globalAlpha=1;
     g.fillStyle='#13274A';g.beginPath();g.arc(m.x,m.y,6/tf.k,0,7);g.fill();g.fillStyle='#0F1D38';g.font=`600 ${12/tf.k}px IBM Plex Sans, sans-serif`;g.fillText('Anda',m.x+9/tf.k,m.y-8/tf.k);}
-  if(NET.hover){const n=NET.hover;g.fillStyle='#0F1D38';g.font=`600 ${12/tf.k}px IBM Plex Sans, sans-serif`;g.fillText(`${n.s.name} · ${n.s.region.name}`,n.x+8/tf.k,n.y+4/tf.k);}
+  if(NET.hover){const n=NET.hover;g.fillStyle='#0F1D38';g.font=`600 ${12/tf.k}px IBM Plex Sans, sans-serif`;g.fillText(`${dispName(n.s)} · ${n.s.region.name}`,n.x+8/tf.k,n.y+4/tf.k);}
   g.restore();
 }
 function renderNetSide(){
@@ -65,7 +65,7 @@ function renderNetSide(){
   NET.links.forEach(l=>{const a=l.e.a,b=l.e.b;[a,b].forEach((x,i)=>{deg.set(x,(deg.get(x)||0)+1);wdeg.set(x,(wdeg.get(x)||0)+l.e.w);const o=S[i?a:b];if(!regs.has(x))regs.set(x,new Set());regs.get(x).add(o.region?o.region.id:-1);});});
   NET.deg=deg;const ranked=[...deg.entries()].sort((a,b)=>b[1]-a[1]);const myRank=ranked.findIndex(x=>x[0]===me.idx)+1;
   const mine=NET.links.filter(l=>l.e.a===me.idx||l.e.b===me.idx).map(l=>({o:S[l.e.a===me.idx?l.e.b:l.e.a],e:l.e})).sort((a,b)=>b.e.w-a.e.w);
-  $('#netMe').innerHTML=`<div class="row between"><h3>Posisi Anda di jaringan</h3><span class="pill acc">peringkat ${myRank||'—'} / ${NET.nodes.length}</span></div>
+  $('#netMe').hidden=!isField();if(isField())$('#netMe').innerHTML=`<div class="row between"><h3>Posisi Anda di jaringan</h3><span class="pill acc">peringkat ${myRank||'—'} / ${NET.nodes.length}</span></div>
    <div class="gauge"><div><b class="num">${deg.get(me.idx)||0}</b><span>rekan terhubung</span></div><div><b class="num">${(regs.get(me.idx)||new Set()).size}</b><span>kab/kota terjangkau</span></div><div><b class="num">${Math.round(wdeg.get(me.idx)||0)}</b><span>bobot interaksi</span></div></div>
    <div>${mine.slice(0,6).map(x=>`<div class="fi" data-psid="${x.o.idx}"><span class="sdot" style="background:${CLHEX[x.o.dom]};margin-top:4px"></span><span>${esc(x.o.name)}<br><span class="muted" style="font-size:.7rem">${esc(x.o.region?x.o.region.name:'—')} · ${Object.keys(x.e.types).map(t=>ETYPE[t]?ETYPE[t][0]:t).join(', ')}</span></span><span class="num small">${Math.round(x.e.w)}</span></div>`).join('')||'<div class="empty">Belum ada interaksi.</div>'}</div>`;
   const tc={};net.edges.forEach(e=>Object.entries(e.types).forEach(([t,w])=>tc[t]=(tc[t]||0)+w));const tm=Math.max(...Object.values(tc),1);
@@ -83,7 +83,7 @@ $('#netColor').onclick=e=>{const b=e.target.closest('button');if(!b||!NET)return
 state.isScope='mine';state.dragging=false;let boardSig='';
 function issueList(){
   const sc=state.isScope,p=$('#isProv').value,c=$('#isCat').value,a=$('#isAuth').value;
-  return I.filter(it=>(state.isRegion?it.region===state.isRegion:(sc==='all'||(sc==='mine'?it.owner===me:it.region===me.region)))&&(!p||it.region.prov===p)&&(!c||it.cat===c)&&(!a||AUTH[it.auth]===a));
+  return I.filter(it=>(state.isRegion?it.region===state.isRegion:(sc==='all'||(sc==='scope'?inScope(it.region):sc==='mine'?it.owner===me:it.region===me.region)))&&(!p||it.region.prov===p)&&(!c||it.cat===c)&&(!a||AUTH[it.auth]===a));
 }
 function renderIssues(force){
   if(state.dragging)return;
@@ -94,7 +94,7 @@ function renderIssues(force){
   $$('#isScope button').forEach(b=>b.setAttribute('aria-pressed',!state.isRegion&&b.dataset.v===state.isScope));
   const chip=state.isRegion?`<div class="row" style="margin-bottom:8px"><button class="btn sm" id="clrReg">Wilayah: ${esc(state.isRegion.name)} ×</button></div>`:'';
   $('#board').innerHTML=ST.map((st,si)=>{const items=list.filter(i=>i.si===si).sort((a,b)=>(b.fresh?1:0)-(a.fresh?1:0)||b.pr-a.pr);
-    return `<div class="col" data-si="${si}"><h4><span>${st[2]}</span><span class="num muted">${items.length}</span></h4>${items.slice(0,14).map(it=>`<div class="icard ${pClass(it.pr)}${it.fresh?' fresh':''}${it.owner===me?' mine':''}" draggable="true" data-iid="${it.id}">
+    return `<div class="col" data-si="${si}"><h4><span>${st[2]}</span><span class="num muted">${items.length}</span></h4>${items.slice(0,14).map(it=>`<div class="icard ${pClass(it.pr)}${it.fresh?' fresh':''}${it.owner===me?' mine':''}${canIssue(it)?'':' ro'}" draggable="${canIssue(it)}" data-iid="${it.id}">
       <div class="row between" style="flex-wrap:nowrap"><span class="mono muted" style="font-size:.66rem">${it.id}${it.owner===me?' · saya':''}</span><b class="num">P${it.pr}</b></div><div style="font-weight:600">${esc(it.title)}</div>
       <div class="muted" style="font-size:.7rem">${esc(it.region.name)} · Desa ${esc(it.desa)}</div><div class="row" style="gap:4px"><span class="ch ${CAT_CL[it.cat]}">${esc(it.cat)}</span>${it.auth===2?'<span class="ch">rujuk</span>':''}${it.referredTo?'<span class="ch">antar-Serdik</span>':''}</div></div>`).join('')}${items.length>14?`<span class="small muted" style="padding:2px 4px">+${items.length-14} lainnya</span>`:''}</div>`;}).join('');
   const old=$('#regChipRow');if(old)old.remove();if(chip){$('#board').insertAdjacentHTML('beforebegin',`<div id="regChipRow">${chip}</div>`);$('#clrReg').onclick=()=>{state.isRegion=null;renderIssues(true);};}
@@ -119,10 +119,11 @@ board.addEventListener('drop',e=>{const col=e.target.closest('.col');if(!col)ret
 board.addEventListener('click',e=>{const c=e.target.closest('.icard');if(c)openIssue(I.find(i=>i.id===c.dataset.iid));});
 function moveIssue(it,si){
   if(!it||it.si===si){renderIssues(true);return;}
+  if(!canIssue(it)){toast('Di luar kewenangan peran Anda: hanya lihat');renderIssues(true);return;}
   if(it.auth===2&&si>=6&&it.si<4){toast('Isu di luar kewenangan perlu diteruskan ke instansi lebih dulu');renderIssues(true);return;}
   if(si>=3)it.monitored=true;if(si>=6&&it.si<6)it.feedback=it.feedback||si===7;
   const from=ST[it.si][2];it.si=si;it.fresh=false;
-  emit('monitor',{s:me,r:it.region,text:`Anda memindahkan ${it.id} dari ${from} ke ${ST[si][2]}`});if(it.owner&&it.owner!==me)addEdge(me,it.owner,'tim',.3);
+  emit('monitor',{s:isField()?me:it.owner,r:it.region,text:`${isField()?'Anda':USER.title} memindahkan ${it.id} dari ${from} ke ${ST[si][2]}`});if(!isField())audit(`Memindahkan ${it.id} ke ${ST[si][2]}`);if(isField()&&it.owner&&it.owner!==me)addEdge(me,it.owner,'tim',.3);
   toast(`${it.id} → ${ST[si][2]}`);renderIssues(true);
 }
 $('#isScope').onclick=e=>{const b=e.target.closest('button');if(!b)return;state.isScope=b.dataset.v;state.isRegion=null;renderIssues(true);};
@@ -155,7 +156,7 @@ $('#polOn').onchange=e=>state.policyOn=e.target.checked;
 $('#scAbsent').onchange=e=>state.absent=e.target.checked;
 $('#scSurge').onchange=e=>state.surge=e.target.checked;
 $('#scLang').onchange=e=>state.langReq=e.target.checked;
-$('#runPl').onclick=runPlacementAnimated;
+$('#runPl').onclick=()=>{if(!can('placement')){toast('Penempatan hanya dapat dijalankan Komando dan Asrena');return;}audit('Menjalankan penempatan dua lapis');runPlacementAnimated();};
 function runPlacementAnimated(){
   if(state.absent&&me&&ABSENT_IDS.includes(me.idx))ABSENT_IDS[ABSENT_IDS.indexOf(me.idx)]=(me.idx+7)%384;
   const old=new Map(S.map(s=>[s,{x:s.cx,z:s.cz,r:s.region,st:s.st}]));
@@ -163,7 +164,7 @@ function runPlacementAnimated(){
   let moved=0;
   S.forEach(s=>{const o=old.get(s);if(!s.region){s.st='off';return;}if(o.r!==s.region)moved++;
     s.tw={fx:o.x??s.px,fz:o.z??s.pz,t:0};s.purpose=null;s.st=o.st==='off'||!o.st?'off':'duty';s.act=s.st==='off'?'Belum check-in':'Siaga di posko desa';});
-  sim.myVer++;sim.alertVer++;if(me)$('#meSub').textContent=`${me.id} · ${me.region.name}${me.coord?' · Koordinator':''}`;
+  sim.myVer++;sim.alertVer++;if(me&&isField())$('#meSub').textContent=`${me.id} · ${me.region.name}${me.coord?' · Koordinator':''}`;
   renderPlacement();updateColumns();if(NET)rebuildNodes();buildMinimap();
   toast(`Penempatan selesai · ${moved} Serdik berpindah · ${R.filter(r=>r.complete).length}/119 tim saling melengkapi`);
 }
@@ -218,7 +219,7 @@ function ahpResults(){
    <p class="note">${ok?'Matriks konsisten (CR ≤ 0,10). Bobot siap dipakai untuk Lapis 2.':'Perbandingan saling bertentangan. Tinjau pasangan yang ekstrem sebelum diterapkan.'}</p>
    <div class="row"><button class="btn primary" id="ahpApply"${ok?'':' disabled'}>Terapkan ke Lapis 2 &amp; jalankan penempatan</button><button class="btn" id="ahpReset">Atur ulang</button></div>`;
   animateBars($('#ahpRes'));
-  $('#ahpApply').onclick=()=>{r.K.forEach((k,i)=>state.weights[k]=Math.round(r.w[i]*100));renderWeights();$('#ahpNote').textContent=`Bobot dari AHP Calculator (CR ${r.CR.toFixed(3)}).`;location.hash='penempatan';setTimeout(runPlacementAnimated,500);};
+  $('#ahpApply').onclick=()=>{if(!can('placement')){toast('Bobot hanya dapat diterapkan Komando dan Asrena');return;}r.K.forEach((k,i)=>state.weights[k]=Math.round(r.w[i]*100));renderWeights();$('#ahpNote').textContent=`Bobot dari AHP Calculator (CR ${r.CR.toFixed(3)}).`;location.hash='penempatan';setTimeout(runPlacementAnimated,500);};
   $('#ahpReset').onclick=()=>{ahpInit();labAHP();};
 }
 
@@ -447,7 +448,7 @@ function renderDirectory(force){
   const dots=pl.map((s,i)=>s===me?'':`<circle data-sid="${s.idx}" cx="${sx(s.vol).toFixed(1)}" cy="${sy(s.quality).toFixed(1)}" r="${(2.5+s.outcome/16).toFixed(1)}" fill="${s.outcome>=60?'#2E7A52':s.outcome>=40?'#C9932F':'#A3202C'}" fill-opacity=".55" style="cursor:pointer${force?`;animation:pop .5s ${Math.round(i*2.5)}ms both`:''}"><title>${esc(s.name)} · volume ${s.vol} · kualitas ${s.quality} · outcome ${s.outcome}%</title></circle>`).join('');
   const mx=sx(me.vol),my=sy(me.quality);
   const meM=`<g data-sid="${me.idx}" style="cursor:pointer"><rect x="${mx-8}" y="${my-8}" width="16" height="16" transform="rotate(45 ${mx} ${my})" fill="#13274A" stroke="#fff" stroke-width="2"/><circle cx="${mx}" cy="${my}" r="12" fill="none" stroke="#13274A" stroke-width="2"><animate attributeName="r" values="10;24" dur="1.6s" repeatCount="indefinite"/><animate attributeName="opacity" values="1;0" dur="1.6s" repeatCount="indefinite"/></circle><text x="${mx+14}" y="${my-10}" style="fill:#13274A;font-weight:700">Anda</text></g>`;
-  $('#scatter').innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="min-width:560px" role="img" aria-label="Sebaran volume terhadap kualitas">${g}<text x="${(W+L)/2}" y="${H-4}" text-anchor="middle">Volume interaksi (6 minggu, bertambah saat kunjungan)</text><text transform="translate(12,${(H-B)/2}) rotate(-90)" text-anchor="middle">Indeks kualitas</text>${dots}${meM}</svg>`;
+  $('#scatter').innerHTML=`<svg viewBox="0 0 ${W} ${H}" style="min-width:560px" role="img" aria-label="Sebaran volume terhadap kualitas">${g}<text x="${(W+L)/2}" y="${H-4}" text-anchor="middle">Volume interaksi (6 minggu, bertambah saat kunjungan)</text><text transform="translate(12,${(H-B)/2}) rotate(-90)" text-anchor="middle">Indeks kualitas</text>${dots}${isField()?meM:''}</svg>`;
   const q=$('#pfQ').value.trim().toLowerCase(),c=$('#pfCl').value,so=$('#pfSort').value;
   const list=pl.filter(s=>(!q||s.name.toLowerCase().includes(q)||s.id.toLowerCase().includes(q)||s.region.name.toLowerCase().includes(q))&&(!c||s.dom===c))
     .sort((a,b)=>so==='id'?a.idx-b.idx:b[so]-a[so]);
@@ -472,8 +473,8 @@ function openProfile(s){
   openDrawer(`<div class="dhead"><div style="min-width:0"><span class="lbl mono">${s.id}${s===me?' · Anda':''}</span><h2>${esc(s.name)}</h2>
    <div class="row" style="margin-top:6px"><span class="ch ${s.dom}">${s.dom}</span><span class="small muted">${CL[s.dom]}</span>${s.priority?`<span class="pill ${s.priority==='kes'?'crit':'warn'}">${PRIO[s.priority]}</span>`:''}</div></div><button class="x" aria-label="Tutup">×</button></div>
   ${r?`<div class="card grid" style="gap:6px"><div class="row between"><span class="pill" style="color:${STAT[s.st][1]};border-color:${STAT[s.st][1]}">● ${STAT[s.st][0]}</span><span class="small muted">${esc(r.name)}${s.coord?' · Koordinator':''}</span></div><span class="small">${esc(s.act||'')}</span>
-   <div class="row">${s!==me?`<button class="btn sm primary" id="pfContact">${r===me.region?'Kirim pesan tim':'Hubungi untuk rujukan'}</button>`:''}<button class="btn sm" id="pfFly">Lihat di peta</button></div></div>`:''}
-  ${s!==me?`<div class="card grid" style="gap:4px"><span class="lbl">Interaksi dengan Anda</span>${e?`<span class="small">${Object.entries(e.types).map(([t,w])=>`${ETYPE[t]?ETYPE[t][0]:t}: ${Math.round(w*10)/10}`).join(' · ')}</span>`:'<span class="small muted">Belum pernah berinteraksi.</span>'}</div>`:''}
+   <div class="row">${s!==me&&isField()?`<button class="btn sm primary" id="pfContact">${r===me.region?'Kirim pesan tim':'Hubungi untuk rujukan'}</button>`:''}<button class="btn sm" id="pfFly">Lihat di peta</button></div></div>`:''}
+  ${s!==me&&isField()?`<div class="card grid" style="gap:4px"><span class="lbl">Interaksi dengan Anda</span>${e?`<span class="small">${Object.entries(e.types).map(([t,w])=>`${ETYPE[t]?ETYPE[t][0]:t}: ${Math.round(w*10)/10}`).join(' · ')}</span>`:'<span class="small muted">Belum pernah berinteraksi.</span>'}</div>`:''}
   ${why?`<div class="grid" style="gap:6px"><div class="row between"><span class="lbl">Mengapa ditempatkan di ${esc(r.name)}?</span><b class="num">${s.fit.toFixed(1)}</b></div><p class="small muted">${s.layer===1?`Lapis 1: dikunci aturan “${PRIO[s.priority]}”.`:'Lapis 2: skor kecocokan tertinggi saat slot diisi.'}${s.buddy?` Buddy: ${esc(s.buddy.name)}.`:''}</p><div class="bars">${why}</div></div>`:''}
   <div><span class="lbl">Skills</span><div class="bars" style="margin-top:6px">${SK.map(([k2,l])=>`<div class="barrow"><span>${l}</span><div class="track"><i data-w="${s.sk[k2]}"></i></div><span class="num">${s.sk[k2]}</span></div>`).join('')}</div></div>
   <div><span class="lbl">Profil</span><dl class="kv"><dt>Asal</dt><dd>${esc(s.java?s.originR.name+', '+s.originProv:s.originProv)}</dd><dt>KKN</dt><dd>${s.kkn?`${s.kknLoc}, ${s.kknMonths} bulan`:'Belum pernah'}</dd><dt>Profesional</dt><dd>${s.work} tahun · ${s.role}, ${s.industry}</dd><dt>Sertifikasi</dt><dd>${s.certs.length?esc(s.certs.join(', ')):'—'}</dd><dt>Usaha</dt><dd>${s.usaha?'Ya · '+s.usahaField:'Tidak'}</dd>${Object.keys(LANGS).filter(l=>s.langs[l]).map(l=>`<dt>Bahasa ${LANGS[l]}</dt><dd>${LVL[s.langs[l]]}</dd>`).join('')}</dl></div>
@@ -486,12 +487,12 @@ function openProfile(s){
 function openIssue(it){
   if(!it)return;const reached=stepReached(it);
   const comp=[['Urgensi',it.urg/5,.30],['Dampak',it.imp/5,.25],['Warga terdampak',Math.min(1,Math.log10(it.aff)/3.3),.20],['Risiko bila diabaikan',it.risk/5,.15],['Kewenangan',it.auth===0?1:it.auth===1?.75:.55,.10]];
-  openDrawer(`<div class="dhead"><div style="min-width:0"><span class="lbl mono">${it.id} · ${ST[it.si][1]}</span><h2>${esc(it.title)}</h2><p class="small muted" style="margin-top:4px">Desa ${esc(it.desa)}, ${esc(it.region.name)} · pencatat ${it.owner?(it.owner===me?'Anda':esc(it.owner.name)):'—'}${it.referredTo?` · dirujuk ke ${esc(it.referredTo.name)}`:''}</p></div><button class="x" aria-label="Tutup">×</button></div>
+  openDrawer(`<div class="dhead"><div style="min-width:0"><span class="lbl mono">${it.id} · ${ST[it.si][1]}</span><h2>${esc(it.title)}</h2><p class="small muted" style="margin-top:4px">Desa ${esc(it.desa)}, ${esc(it.region.name)} · pencatat ${it.owner?(it.owner===me?'Anda':esc(dispName(it.owner))):'—'}${it.referredTo?` · dirujuk ke ${esc(it.referredTo.name)}`:''}</p></div><button class="x" aria-label="Tutup">×</button></div>
   <div class="row"><span class="ch ${CAT_CL[it.cat]}">${esc(it.cat)}</span><span class="pill ${it.auth===0?'ok':it.auth===1?'warn':'crit'}">${AUTH[it.auth]}</span><span class="pill">${fmt(it.aff)} warga</span></div>
   <div class="card grid"><div class="row between"><span class="lbl">Skor prioritas</span><b class="num" style="font-size:1.4rem">${it.pr}</b></div><div class="bars">${comp.map(([l,v,w])=>`<div class="barrow"><span>${l} <span class="muted">×${w}</span></span><div class="track"><i data-w="${Math.round(v*100)}"></i></div><span class="num">+${Math.round(v*w*100)}</span></div>`).join('')}</div></div>
   <div><span class="lbl">Alur tindak lanjut</span><div class="steps" style="margin-top:6px">${STEPS.map((s,i)=>`<div class="step ${i<reached?'done':i===reached?'now':''}"><i>${i+1}</i><span><b>${s}</b> <span class="muted">— ${STEP_ID[i]}</span>${i===5&&it.si>=4?`<br><span class="small">Dirujuk ke <b>${INST[it.cat]}</b></span>`:''}</span></div>`).join('')}</div></div>
   <p class="note">${it.auth===2?`Di luar kewenangan Satgas: dokumentasikan, rujuk ke ${INST[it.cat]}, pantau, dan kabarkan ke warga tanpa menjanjikan penyelesaian.`:it.auth===1?`Butuh kolaborasi dengan ${INST[it.cat]} dan rekan yang kompetensinya sesuai.`:'Dapat ditangani langsung bersama warga.'}</p>
-  <div class="row"><label class="field" for="isMove">Pindahkan status<select id="isMove">${ST.map((s,i)=>`<option value="${i}"${i===it.si?' selected':''}>${s[2]}</option>`).join('')}</select></label>${!it.feedback&&it.si>=3?'<button class="btn" id="fbBtn" style="align-self:end">Tandai umpan balik ke warga</button>':''}</div>`);
+  <div class="row"><label class="field" for="isMove">Pindahkan status<select id="isMove"${canIssue(it)?'':' disabled'}>${ST.map((s,i)=>`<option value="${i}"${i===it.si?' selected':''}>${s[2]}</option>`).join('')}</select></label>${!it.feedback&&it.si>=3&&canIssue(it)?'<button class="btn" id="fbBtn" style="align-self:end">Tandai umpan balik ke warga</button>':''}</div>`);
   $('#isMove').onchange=e=>{moveIssue(it,+e.target.value);openIssue(it);};
   const f=$('#fbBtn');if(f)f.onclick=()=>{it.feedback=true;emit('respons',{s:me,r:it.region,text:`Umpan balik ${it.id} dikabarkan ke warga`});toast('Umpan balik tercatat');openIssue(it);};
 }
@@ -558,8 +559,8 @@ function frame(t){
   if(state.tab==='lab'&&lab.tool==='queue')queueAnim(dt);
   tick.a+=dt;tick.b+=dt;tick.c+=dt;tick.d+=dt;
   if(tick.a>.25){tick.a=0;clock();flushFeed();if(state.tab==='operasi'){renderOpsKpis();renderStatus();}}
-  if(tick.b>.5){tick.b=0;if(state.tab==='saya')renderHome();if(state.tab==='operasi')renderSide(false);if(state.tab==='hub')renderHub(false);updateBadges();}
+  if(tick.b>.5){tick.b=0;if(state.tab==='saya'){if(isField())renderHome();else renderRoleHome(false);}if(state.tab==='operasi')renderSide(false);if(state.tab==='hub')renderHub(false);updateBadges();}
   if(tick.c>1.5){tick.c=0;if(state.tab==='operasi'||state.tab==='penempatan'){updateColumns();}if(state.tab==='operasi')renderHourly();if(state.tab==='isu')renderIssues(false);if(state.tab==='jaringan')renderNetSide();if(state.tab==='lab')labTick();if(state.tab==='analitik')renderAnalytics(false);}
-  if(tick.d>4){tick.d=0;if(state.tab==='saya')renderPerf();if(state.tab==='direktori')renderDirectory(false);}
+  if(tick.d>4){tick.d=0;if(state.tab==='saya'&&isField())renderPerf();if(state.tab==='direktori')renderDirectory(false);}
 }
 

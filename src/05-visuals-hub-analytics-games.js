@@ -78,7 +78,7 @@ function hubMsg(ch,from,text,extra={}){const m=Object.assign({id:++hub.mid,from,
   const arr=ch.startsWith('dm:')?hub.dms[ch]:hub.msgs[ch];if(arr.length>120)arr.shift();
   if(!(state.tab==='hub'&&hub.ch===ch)&&from!==me)hub.unread[ch]=(hub.unread[ch]||0)+1;return m;}
 const fillT=(t,s)=>t.replace('{prov}',s.region?s.region.prov:'').replace('{kab}',s.region?s.region.name:'').replace('{day}',sim.day);
-function hubPeople(ch){if(!me)return S.filter(s=>s.region);if(ch==='prov')return S.filter(s=>s.region&&s.region.prov===me.region.prov&&s!==me);return S.filter(s=>s.region&&s!==me);}
+function hubPeople(ch){if(!me)return S.filter(s=>s.region);if(ch==='staf')return STAFF_PEOPLE.filter(p=>p!==me);if(ch==='prov')return S.filter(s=>s.region&&s.region.prov===me.region.prov&&s!==me);return S.filter(s=>s.region&&s!==me);}
 (function seedHub(){const pl=S.filter(s=>s.region);
   for(let i=0;i<9;i++){const s=pick(pl);hubMsg('angkatan',s,fillT(pick(HUBT.angkatan),s));}
   for(let i=0;i<6;i++){const s=pick(pl);hubMsg('praktik',s,pick(HUBT.praktik));}
@@ -98,7 +98,7 @@ window.__hubTick=f=>{
   sim.alerts.forEach(a=>{if(a.type==='bantuan'&&a.s!==me&&!hub.posted.has(a.id)){hub.posted.add(a.id);hubMsg('bantuan',a.s,a.text,{kind:'help',alert:a});}});
   const now=abs();hub.pending=hub.pending.filter(p=>{if(now>=p.at){hubMsg(p.ch,p.from,p.text);return false;}return true;});
 };
-const CHANS=()=>[['tim','hash',`Tim ${me.region.name}`],['prov','hash',`Provinsi ${me.region.prov}`],['angkatan','users','Angkatan P3MD'],['bantuan','hand','Bantuan lintas wilayah'],['praktik','star','Praktik baik'],['posko','mega','Pengumuman Posko']];
+const CHANS=()=>!isField()?[['staf','shield','Ruang Komando'],['posko','mega','Pengumuman Posko'],['angkatan','users','Angkatan P3MD'],['bantuan','hand','Bantuan lintas wilayah'],['praktik','star','Praktik baik']]:[['tim','hash',`Tim ${me.region.name}`],['prov','hash',`Provinsi ${me.region.prov}`],['angkatan','users','Angkatan P3MD'],['bantuan','hand','Bantuan lintas wilayah'],['praktik','star','Praktik baik'],['posko','mega','Pengumuman Posko']];
 function hubList(ch){if(ch==='tim')return sim.chat.map((m,i)=>({id:'t'+i,from:m.from,text:m.text,time:m.time,sys:m.sys,sent:sentiment(m.text).score,reacts:null}));return ch.startsWith('dm:')?(hub.dms[ch]||[]):hub.msgs[ch];}
 function renderHub(force){
   if(!me)return;const ch=hub.ch;hub.unread[ch]=0;
@@ -124,35 +124,36 @@ function hubMsgHtml(m,ch,isNew){
   const txt=hub.showSent?hiSent(m.text):esc(m.text);
   let extra='';
   if(m.kind==='poll'){const tot=m.poll.opts.reduce((a,o)=>a+o.v,0)||1;extra=`<div class="pollcard"><b class="small">${esc(m.text)}</b>${m.poll.opts.map((o,i)=>`<button class="pollopt${m.poll.my===i?' mine':''}" data-poll="${m.id}|${i}|${ch}"><i style="width:${Math.round(o.v/tot*100)}%"></i><span>${esc(o.t)}</span><b class="num">${Math.round(o.v/tot*100)}%</b></button>`).join('')}<span class="small muted">${tot} suara</span></div>`;}
-  if(m.kind==='help'){const a=m.alert;extra=`<div class="helpcard"><div class="row between"><span class="row small" style="gap:6px"><svg class="ic" style="color:var(--rose)"><use href="#i-hand"/></svg><b>Butuh kluster ${a.need}</b> · ${esc(a.s.region.name)}</span><span class="pill ${a.state==='open'?'warn':'ok'}">${a.state==='open'?'menunggu':'ditangani '+esc(a.handler||'')}</span></div>${a.state==='open'?`<button class="btn sm primary" data-helpme="${a.id}" style="justify-self:start">Saya bisa bantu · ${Math.round(Math.hypot(a.s.cx-me.cx,a.s.cz-me.cz)*11)} km</button>`:''}</div>`;}
+  if(m.kind==='help'){const a=m.alert;extra=`<div class="helpcard"><div class="row between"><span class="row small" style="gap:6px"><svg class="ic" style="color:var(--rose)"><use href="#i-hand"/></svg><b>Butuh kluster ${a.need}</b> · ${esc(a.s.region.name)}</span><span class="pill ${a.state==='open'?'warn':'ok'}">${a.state==='open'?'menunggu':'ditangani '+esc(a.handler||'')}</span></div>${a.state==='open'&&isField()?`<button class="btn sm primary" data-helpme="${a.id}" style="justify-self:start">Saya bisa bantu · ${Math.round(Math.hypot(a.s.cx-me.cx,a.s.cz-me.cz)*11)} km</button>`:''}</div>`;}
   if(m.kind==='report')extra=`<div class="repcard">${m.card}</div>`;
   const body=m.kind==='ann'?`<div class="anncard"><span class="lbl" style="color:var(--gold-2)">Pengumuman Posko</span><div>${txt}</div></div>`:m.kind==='poll'?'':`<div class="txt">${txt}</div>`;
   const rx=m.reacts?`<div class="reacts">${Object.entries(m.reacts).map(([l,n])=>`<button class="${m.myR.has(l)?'on':''}" data-react="${m.id}|${esc(l)}|${ch}">${esc(l)} ${n||''}</button>`).join('')}</div>`:'';
-  return `<div class="hm${mine?' mine':''}${isNew?' in':''}">${av}<div style="min-width:0"><div class="who">${mine?'Anda':s?esc(s.name):'Posko Satgas'}${s&&s.region?`<span class="muted" style="font-weight:400">· ${esc(s.region.name)}</span>`:''}<time>${m.time}</time>${hub.showSent?`<span class="sent" style="background:${sentCol(m.sent)}" data-tt="Skor sentimen ${m.sent.toFixed(2)}"></span>`:''}</div>${body}${extra}${rx}</div></div>`;
+  return `<div class="hm${mine?' mine':''}${isNew?' in':''}">${av}<div style="min-width:0"><div class="who">${mine?'Anda':s?esc(dispName(s)):'Posko Satgas'}${s&&(s.isStaff||s.region)?`<span class="muted" style="font-weight:400">· ${esc(s.isStaff?s.unit:s.region.name)}</span>`:''}<time>${m.time}</time>${hub.showSent?`<span class="sent" style="background:${sentCol(m.sent)}" data-tt="Skor sentimen ${m.sent.toFixed(2)}"></span>`:''}</div>${body}${extra}${rx}</div></div>`;
 }
 function renderHubSide(){
   const pl=S.filter(s=>s.region);const recent=[...hub.msgs.angkatan,...hub.msgs.prov].slice(-40).map(m=>m.sent);
   const moral=recent.length?recent.reduce((a,b)=>a+b,0)/recent.length:0;
-  const online=me.region.team.filter(s=>s!==me).concat(pl.filter(s=>s.region.prov===me.region.prov&&s.region!==me.region&&s.st!=='off').slice(0,16));
+  const online=isField()?me.region.team.filter(s=>s!==me).concat(pl.filter(s=>s.region.prov===me.region.prov&&s.region!==me.region&&s.st!=='off').slice(0,16)):pl.filter(s=>inScope(s.region)&&s.st!=='off'&&s.st!=='rest').slice(0,24);
   const openHelp=sim.alerts.filter(a=>a.type==='bantuan'&&a.state==='open');
   const k=[Math.round(moral*100),online.map(s=>s.st).join(''),openHelp.length].join('|');if(k===renderHubSide._k)return;renderHubSide._k=k;
   $('#hubSide').innerHTML=`<div class="card grid" style="gap:6px"><div class="row between"><h3>Pulse moral Serdik</h3><span class="small muted">40 pesan terakhir</span></div>${V.gauge(moral,'kanal angkatan & provinsi')}</div>
-   <div class="card grid" style="gap:8px"><div class="row between"><h3>Online · ${esc(me.region.prov)}</h3><span class="small muted">klik untuk DM</span></div><div class="online">${online.map(s=>`<div class="avatar" data-dm="${s.idx}" style="background:${CLHEX[s.dom]}" data-tt="${esc(s.name)} · ${esc(s.region.name)} · ${STAT[s.st][0]}">${esc(initials(s.name))}<span class="sdot" style="background:${STAT[s.st][1]}"></span></div>`).join('')}</div></div>
+   <div class="card grid" style="gap:8px"><div class="row between"><h3>Online · ${esc(isField()?me.region.prov:USER.provs?USER.title:'Satgas')}</h3><span class="small muted">klik untuk DM</span></div><div class="online">${online.map(s=>`<div class="avatar" data-dm="${s.idx}" style="background:${CLHEX[s.dom]}" data-tt="${esc(s.name)} · ${esc(s.region.name)} · ${STAT[s.st][0]}">${esc(initials(s.name))}<span class="sdot" style="background:${STAT[s.st][1]}"></span></div>`).join('')}</div></div>
    <div class="card grid" style="gap:8px"><div class="row between"><h3>Bantuan terbuka</h3><span class="pill ${openHelp.length?'warn':'ok'}">${openHelp.length}</span></div>${openHelp.slice(0,4).map(a=>`<div class="fi" data-hubhelp="${a.id}"><span class="sdot" style="background:${CLHEX[a.need]};margin-top:5px"></span><span>${esc(a.s.name)} · kluster ${a.need}<br><span class="muted" style="font-size:.7rem">${esc(a.s.region.name)} · ${Math.round(Math.hypot(a.s.cx-me.cx,a.s.cz-me.cz)*11)} km</span></span><span></span></div>`).join('')||'<span class="small muted">Tidak ada permintaan terbuka.</span>'}</div>`;
 }
 $('#hubCh').onclick=e=>{const b=e.target.closest('[data-ch]');if(!b)return;hub.ch=b.dataset.ch;renderHub(true);$('#hubIn').focus();};
 $('#pane-hub').addEventListener('click',e=>{
-  const r=e.target.closest('[data-react]');if(r){const[id,l,ch]=r.dataset.react.split('|');const m=hubList(ch).find(x=>String(x.id)===id);if(m){if(m.myR.has(l)){m.myR.delete(l);m.reacts[l]--;}else{m.myR.add(l);m.reacts[l]=(m.reacts[l]||0)+1;if(m.from&&m.from!==me)addEdge(me,m.from,'berbagi',.2);}hub.lastLen=-1;renderHub();}return;}
+  const r=e.target.closest('[data-react]');if(r){const[id,l,ch]=r.dataset.react.split('|');const m=hubList(ch).find(x=>String(x.id)===id);if(m){if(m.myR.has(l)){m.myR.delete(l);m.reacts[l]--;}else{m.myR.add(l);m.reacts[l]=(m.reacts[l]||0)+1;if(isField()&&m.from&&m.from!==me&&!m.from.isStaff)addEdge(me,m.from,'berbagi',.2);}hub.lastLen=-1;renderHub();}return;}
   const p=e.target.closest('[data-poll]');if(p){const[id,i,ch]=p.dataset.poll.split('|');const m=hubList(ch).find(x=>String(x.id)===id);if(m&&m.poll.my!==+i){if(m.poll.my>=0)m.poll.opts[m.poll.my].v--;m.poll.my=+i;m.poll.opts[+i].v++;hub.lastLen=-1;renderHub();toast('Suara tercatat');}return;}
-  const h=e.target.closest('[data-helpme]');if(h){const a=sim.alerts.find(x=>x.id===h.dataset.helpme);if(a&&a.state==='open'){assignHelper(a,me);hubMsg('bantuan',me,`Saya bantu ${a.s.name} di ${a.s.region.name}.`);toast('Anda berangkat membantu');hub.lastLen=-1;renderHub(true);}return;}
+  const h=e.target.closest('[data-helpme]');if(h&&isField()){const a=sim.alerts.find(x=>x.id===h.dataset.helpme);if(a&&a.state==='open'){assignHelper(a,me);hubMsg('bantuan',me,`Saya bantu ${a.s.name} di ${a.s.region.name}.`);toast('Anda berangkat membantu');hub.lastLen=-1;renderHub(true);}return;}
   const d=e.target.closest('[data-dm]');if(d){const k='dm:'+d.dataset.dm;hub.dms[k]=hub.dms[k]||[];hub.ch=k;renderHub(true);$('#hubIn').focus();return;}
   const hh=e.target.closest('[data-hubhelp]');if(hh){const a=sim.alerts.find(x=>x.id===hh.dataset.hubhelp);hub.ch='bantuan';renderHub(true);return;}
 });
 $('#hubForm').onsubmit=e=>{e.preventDefault();const v=$('#hubIn').value.trim();if(!v)return;$('#hubIn').value='';const ch=hub.ch;
+  if(ch==='posko'&&!can('announce')){toast('Kanal pengumuman hanya untuk Komando dan Konten & Layanan');$('#hubIn').value=v;return;}
   if(ch==='tim'){myChat(v);}
   else{hubMsg(ch,me,v);const ppl=ch.startsWith('dm:')?[S[+ch.slice(3)]]:hubPeople(ch);const from=pick(ppl);
     if(from&&ch!=='posko'){const low=v.toLowerCase();const rep=/bantu|tolong/.test(low)?'Siap, saya bisa bantu. Kirim lokasinya ya.':/terima kasih|makasih/.test(low)?'Sama-sama, semangat terus!':/\?/.test(v)?'Setahu saya bisa lewat rujukan ke dinas terkait, nanti saya kirim kontaknya.':pick(['Setuju!','Mantap, terima kasih sudah berbagi.','Siap, dicatat.','Bagus idenya, nanti saya coba di desa saya.']);
-      hub.pending.push({at:abs()+rint(2,6),ch,from,text:rep});addEdge(me,from,ch.startsWith('dm:')?'referral':'berbagi',.3);}}
+      hub.pending.push({at:abs()+rint(2,6),ch,from,text:rep});if(isField()&&!from.isStaff)addEdge(me,from,ch.startsWith('dm:')?'referral':'berbagi',.3);}}
   hub.lastLen=-1;renderHub(true);};
 $('#hubPoll').onclick=()=>{const ch=hub.ch==='tim'?'prov':hub.ch;if(ch.startsWith('dm:')){toast('Polling tersedia di kanal');return;}
   hubMsg(ch,me,'Polling: fokus kolaborasi minggu depan?',{kind:'poll',poll:{opts:[{t:'Kesehatan & posyandu',v:0},{t:'UMKM & ekonomi',v:0},{t:'Infrastruktur & rujukan',v:0}],my:-1}});
@@ -317,7 +318,8 @@ $('#anBody').addEventListener('click',e=>{const c=e.target.closest('[data-rid]')
    ================================================================ */
 const RP={view:'auto',scope:'tim',period:'hari',streak:Array.from({length:9},(_,i)=>hsh(i*3.3)>.25),mood:3,sent:false};
 $('#rpSeg').onclick=e=>{const b=e.target.closest('button');if(!b)return;RP.view=b.dataset.v;$$('#rpSeg button').forEach(x=>x.setAttribute('aria-pressed',x===b));renderReport(true);};
-function scopeSet(sc){if(sc==='saya')return{label:`${me.name}`,serd:[me],regs:[me.region],iss:I.filter(i=>i.owner===me)};
+function scopeSet(sc){if(sc.startsWith('kw:')){const k=KORWIL[sc.slice(3)],regs=R.filter(r=>k.provs.includes(r.prov));return{label:`${k.name} · ${k.area}`,serd:S.filter(s=>s.region&&regs.includes(s.region)),regs,iss:I.filter(i=>regs.includes(i.region))};}
+  if(sc==='saya')return{label:`${me.name}`,serd:[me],regs:[me.region],iss:I.filter(i=>i.owner===me)};
   if(sc==='tim')return{label:`Tim ${me.region.name}`,serd:me.region.team,regs:[me.region],iss:I.filter(i=>i.region===me.region)};
   if(sc==='prov'){const regs=R.filter(r=>r.prov===me.region.prov);return{label:`Provinsi ${me.region.prov}`,serd:S.filter(s=>s.region&&s.region.prov===me.region.prov),regs,iss:I.filter(i=>i.region.prov===me.region.prov)};}
   return{label:'Satgas Soedirman · Pulau Jawa',serd:S.filter(s=>s.region),regs:R,iss:I};}
@@ -355,7 +357,7 @@ function renderReport(force){
   const tm=Math.max(1,...tiles.map(t=>t[1]));
   const html=`<div class="rp"><div class="card grid" style="gap:12px;position:sticky;top:120px">
     <h3>Susun laporan</h3>
-    <label class="field">Cakupan<div class="seg" id="rpScope">${[['saya','Saya'],['tim','Tim'],['prov','Provinsi'],['satgas','Satgas']].map(([k,l])=>`<button type="button" data-k="${k}" aria-pressed="${RP.scope===k}">${l}</button>`).join('')}</div></label>
+    <label class="field">Cakupan<div class="seg" id="rpScope">${reportScopes().map(([k,l])=>`<button type="button" data-k="${k}" aria-pressed="${RP.scope===k}">${l}</button>`).join('')}</div></label>
     <label class="field">Periode<div class="seg" id="rpPer">${[['hari','Hari ini'],['minggu','7 hari']].map(([k,l])=>`<button type="button" data-k="${k}" aria-pressed="${RP.period===k}">${l}</button>`).join('')}</div></label>
     <button class="btn primary" id="rpSend"><svg class="ic"><use href="#i-send"/></svg>Kirim ke Hub</button><button class="btn" id="rpCopy"><svg class="ic"><use href="#i-copy"/></svg>Salin ringkasan</button>
     <p class="small muted">Semua angka dihitung dari data operasi saat ini.</p></div>
@@ -374,7 +376,7 @@ function renderReport(force){
   $('#rpPer').onclick=e=>{const b=e.target.closest('[data-k]');if(b){RP.period=b.dataset.k;renderReport(true);}};
   const summary=()=>`Laporan ${RP.period==='hari'?'harian':'mingguan'} ${d.sc.label} (Hari ke-${sim.day}): ${d.visits} kunjungan, ${d.newI.length} aspirasi baru, ${d.fwd} diteruskan, tindak lanjut ${d.fu}%, sentimen warga ${d.sw.toFixed(2)}.`;
   $('#rpCopy').onclick=()=>{const t=summary();const done=()=>toast('Ringkasan disalin');try{navigator.clipboard.writeText(t).then(done,()=>{$('#rpCopy').insertAdjacentHTML('afterend',`<textarea style="width:100%;height:90px">${esc(t)}</textarea>`);});}catch(e){$('#rpCopy').insertAdjacentHTML('afterend',`<textarea style="width:100%;height:90px">${esc(t)}</textarea>`);}};
-  $('#rpSend').onclick=()=>{const ch=RP.scope==='tim'||RP.scope==='saya'?'prov':'angkatan';hubMsg(ch,me,summary(),{kind:'report',card:`<b class="small">Laporan · ${esc(d.sc.label)}</b><div class="row" style="gap:6px">${tiles.map(t=>`<span class="pill" style="border-color:${t[2]};color:${t[2]}">${t[0]} ${t[1]}</span>`).join('')}</div>`});toast(`Laporan terkirim ke Hub #${ch}`);};
+  $('#rpSend').onclick=()=>{if(!tabAllowed('hub')){audit('Meneruskan laporan '+d.sc.label);toast('Laporan diteruskan ke Komando');return;}const ch=!isField()?'staf':RP.scope==='tim'||RP.scope==='saya'?'prov':'angkatan';hubMsg(ch,me,summary(),{kind:'report',card:`<b class="small">Laporan · ${esc(d.sc.label)}</b><div class="row" style="gap:6px">${tiles.map(t=>`<span class="pill" style="border-color:${t[2]};color:${t[2]}">${t[0]} ${t[1]}</span>`).join('')}</div>`});toast(`Laporan terkirim ke Hub #${ch}`);};
   $('#rpBody').querySelectorAll('[data-iid]').forEach(x=>x.onclick=()=>openIssue(I.find(i=>i.id===x.dataset.iid)));
 }
 const FACES=[['Berat','M7 16c2-2.5 8-2.5 10 0'],['Lelah','M7 15.5c2-1.2 8-1.2 10 0'],['Biasa','M7 15h10'],['Baik','M7 14.5c2 1.5 8 1.5 10 0'],['Semangat','M7 14c2 3 8 3 10 0']];
@@ -531,7 +533,7 @@ function renderHelp(){
   $('#tkForm').onsubmit=e=>{e.preventDefault();const t=$('#tkText').value.trim();if(!t)return;const tk={id:'TKT-'+String(42+HELP.tickets.length).padStart(3,'0'),t,st:0,c:$('#tkCat').value};HELP.tickets.unshift(tk);toast(`${tk.id} dibuat · helpdesk akan merespons`);renderHelp();
     let k=0;const iv=setInterval(()=>{tk.st++;if(state.tab==='bantuan')renderHelp();if(tk.st>=3||++k>3)clearInterval(iv);},4000);};
 }
-$('#sosBtn').onclick=()=>{if(!me)return;me.st='kendala';me.purpose=null;me.act='Kendala: darurat lapangan';const a=addAlert({type:'kendala',s:me,text:'Darurat lapangan dilaporkan dari tombol bantuan'});alertAct(a,'eskalasi');toast('Darurat terkirim ke koordinator dan Posko Satgas');sim.myVer++;};
+$('#sosBtn').onclick=()=>{if(!me||!isField())return;me.st='kendala';me.purpose=null;me.act='Kendala: darurat lapangan';const a=addAlert({type:'kendala',s:me,text:'Darurat lapangan dilaporkan dari tombol bantuan'});alertAct(a,'eskalasi');toast('Darurat terkirim ke koordinator dan Posko Satgas');sim.myVer++;};
 
 /* ================================================================
    LAB additions: Monte Carlo risk & budget
