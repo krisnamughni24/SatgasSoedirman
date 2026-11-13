@@ -108,6 +108,32 @@ const PRIO={kes:'Mandat kesehatan',khusus:'Penugasan khusus (wilayah akses sulit
 const ABSENT_IDS=[17,58,133,201,276,349]; // used by what-if; 17 is avoided below for exemplar stability
 ABSENT_IDS[0]=19;
 
+/* ============ penetration map: resistance index, gender, competency tier ============ */
+// Resistance Index (IR, 0–100) per regency: dummy, deterministic (hsh, not rnd, so the seeded data above stays stable)
+const IR_PROV={'Banten':6,'DKI Jakarta':-4,'Jawa Barat':4,'Jawa Tengah':-6,'DI Yogyakarta':-24,'Jawa Timur':12};
+R.forEach(r=>{
+  let v=12+hsh(r.id*7.13+3.1)*62+IR_PROV[r.prov]+(r.remote?14:0)+(MADURA.has(r.name)?10:0)+(r.kota?-7:0);
+  r.ir=Math.round(clamp(v));
+});
+// Level 1: three categories. Level 2: gradient inside each category driven by the exact IR.
+// Shade gets darker toward the extreme of its category (deep green = safest, deep red = most resistant).
+const IRCAT={
+  aman:    {n:'Aman',                   lo:0,  hi:33,  light:'#C0DD97', dark:'#27500A', rev:true},
+  sedang:  {n:'Tidak terlalu resisten', lo:34, hi:66,  light:'#FAC775', dark:'#854F0B'},
+  resisten:{n:'Resisten',               lo:67, hi:100, light:'#F7C1C1', dark:'#791F1F'},
+};
+const IRKEYS=['aman','sedang','resisten'];
+const irCat=v=>v<34?'aman':v<67?'sedang':'resisten';
+function irIntensity(v){const c=IRCAT[irCat(v)];const t=(v-c.lo)/(c.hi-c.lo);return Math.max(0,Math.min(1,c.rev?1-t:t));}
+function mixHex(a,b,t){const p=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));const A=p(a),B=p(b);return '#'+A.map((x,i)=>Math.round(x+(B[i]-x)*t).toString(16).padStart(2,'0')).join('');}
+const irColor=v=>{const c=IRCAT[irCat(v)];return mixHex(c.light,c.dark,irIntensity(v));};
+const irInk=v=>irIntensity(v)>.55?'#FFFFFF':({aman:'#173404',sedang:'#412402',resisten:'#501313'})[irCat(v)];
+function irGradientCSS(){const st=[];for(let v=0;v<=100;v++)st.push(`${irColor(v)} ${v}%`);return `linear-gradient(90deg,${st.join(',')})`;}
+// Gender (dummy) and competency tier: top 25% Superior, bottom 20% Inferior, rest Normal
+S.forEach(s=>{s.sex=hsh(s.idx*3.31+1.7)<.36?'P':'L';const c=[s.cA,s.cB,s.cC,s.cD];s.compScore=Math.round(.5*Math.max(...c)+.5*c.reduce((a,b)=>a+b,0)/4);});
+[...S].sort((a,b)=>b.compScore-a.compScore).forEach((s,i)=>s.tier=i<S.length*.25?'sup':i>=S.length*.8?'inf':'nor');
+const TIER={sup:{n:'Superior',d:'Kinerja & potensi tinggi',fill:'#13274A',stroke:'#FFFFFF'},nor:{n:'Normal',d:'Sesuai ekspektasi',fill:'#FFFFFF',stroke:'#13274A'},inf:{n:'Inferior',d:'Perlu pengembangan',fill:'#8A8F98',stroke:'#FFFFFF'}};
+
 /* ============ placement engine ============ */
 function score(s,r){
   const W=state.weights, team=r.team.filter(m=>m!==s);

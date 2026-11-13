@@ -304,15 +304,17 @@ function metricVal(r){
   if(state.metric==='aktivitas')return r.actToday||0;
   if(state.metric==='alert')return sim.alerts.filter(a=>a.state!=='done'&&a.s.region===r).length;
   if(state.metric==='komplementer')return r.covN;
+  if(state.metric==='resistensi')return r.ir;
   return I.filter(it=>it.region===r&&active(it)).length;
 }
-function metricLabel(r){const v=metricVal(r);return{isu:`${v} isu aktif`,aktivitas:`${v} aktivitas hari ini`,alert:`${v} peringatan terbuka`,komplementer:`${v}/4 kluster terpenuhi${r.missing.length?' · kurang '+r.missing.join(', '):''}`}[state.metric];}
+function metricLabel(r){const v=metricVal(r);return{isu:`${v} isu aktif`,aktivitas:`${v} aktivitas hari ini`,alert:`${v} peringatan terbuka`,komplementer:`${v}/4 kluster terpenuhi${r.missing.length?' · kurang '+r.missing.join(', '):''}`,resistensi:`Indeks resistensi ${v}% · ${IRCAT[irCat(v)].n}`}[state.metric];}
 let colCache=0;
 function updateColumns(){
   if(!T)return;const vals=R.map(metricVal),mx=Math.max(...vals,1);
   const c0=new THREE.Color('#EADFC3'),c1=new THREE.Color('#13274A'),crit=new THREE.Color('#A3202C'),warn=new THREE.Color('#C9932F'),ok=new THREE.Color('#2E7A52');
   T.cols.forEach((m,i)=>{const r=R[i],v=vals[i],n=v/mx;
     if(state.metric==='komplementer'){m.userData.target=.6+v*1.3;m.material.color.copy(r.team.length===0?crit:r.complete?(r.covN===4?ok:c1):(r.missing.length>1?crit:warn));}
+    else if(state.metric==='resistensi'){m.userData.target=.25+v/100*6.5;m.material.color.set(irColor(v));}
     else if(state.metric==='alert'){m.userData.target=v?1+v*2.2:.15;m.material.color.copy(v?crit:c0);}
     else{m.userData.target=.25+n*6.5;m.material.color.copy(c0).lerp(c1,n);}});
   renderLegend();
@@ -321,6 +323,7 @@ function renderLegend(){
   const m=state.metric;let h='';
   if(m==='komplementer')h='<div><b>Kelengkapan tim</b></div><div><span class="sw" style="background:#2E7A52"></span>A–D <span class="sw" style="background:#13274A;margin-left:6px"></span>A–C <span class="sw" style="background:#C9932F;margin-left:6px"></span>kurang 1 <span class="sw" style="background:#A3202C;margin-left:6px"></span>kurang ≥2</div>';
   else if(m==='alert')h='<div><b>Peringatan terbuka per wilayah</b></div>';
+  else if(m==='resistensi')h=`<div><b>Indeks resistensi (IR)</b></div><div style="height:8px;border-radius:4px;width:170px;max-width:100%;background:${irGradientCSS()}"></div><div style="display:flex;justify-content:space-between;width:170px;max-width:100%"><span>Aman</span><span>Sedang</span><span>Resisten</span></div>`;
   else h=`<div><b>${m==='isu'?'Isu aktif':'Aktivitas hari ini'}</b></div><div style="height:7px;border-radius:4px;width:150px;max-width:100%;background:linear-gradient(90deg,#EADFC3,#13274A)"></div>`;
   if(state.colorMode==='status')h+='<div style="display:flex;flex-wrap:wrap;gap:2px 8px">'+['duty','travel','visit','help','meet','kendala','off'].map(k=>`<span><span class="sw" style="background:${STAT[k][1]}"></span>${STAT[k][0]}</span>`).join('')+'</div>';
   else h+='<div>'+['A','B','C','D'].map(k=>`<span class="sw" style="background:${CLHEX[k]};margin-left:4px"></span>${k}`).join(' ')+'</div>';
